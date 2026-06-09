@@ -164,8 +164,9 @@ def _function_to_openai(f: Function) -> ChatCompletionToolParam:
 
 
 @retry(
-    wait=wait_random_exponential(multiplier=1, max=40),
-    stop=stop_after_attempt(3),
+    # Strengthened backoff so sustained rate limits (429) ride out instead of failing after 3 tries.
+    wait=wait_random_exponential(multiplier=2, max=90),
+    stop=stop_after_attempt(8),
     reraise=True,
     retry=retry_if_not_exception_type((openai.BadRequestError, openai.UnprocessableEntityError)),
 )

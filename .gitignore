@@ -3,3 +3,8 @@
 */travel/*
 */workspace/*
 *__pycache__*
+.env
+devnotes/
+.venv/.venv/
+__pycache__/
+*.pyc

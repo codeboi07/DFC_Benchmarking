@@ -53,6 +53,8 @@ DEFENSES = [
     "camel",
     "drift",
     "progent",
+    "dfc",
+    "dfc_url",  # KILLED EXPERIMENT (URL allowlist self-certifies) — see devnotes/url_policy_prototype_spec.md
 ]
 """Available defenses."""
 
@@ -392,7 +394,7 @@ def _build_drift_pipeline(
 def load_system_message(system_message_name: str | None) -> str:
     package_files = importlib.resources.files("agentdojo")
     path = package_files / "data" / "system_messages.yaml"
-    with importlib.resources.as_file(path) as p, p.open() as f:
+    with importlib.resources.as_file(path) as p, p.open(encoding="utf-8") as f:
         system_messages = yaml.safe_load(f)
     return system_messages.get(system_message_name, system_messages["default"])
 
@@ -584,6 +586,20 @@ class AgentPipeline(BasePipelineElement):
                 system_message_component,
                 init_query_component,
                 ProgentPolicyBootstrap(config.suite_name),
+                llm,
+                tools_loop,
+            ])
+            pipeline.name = f"{llm_name}-{config.defense}"
+            return pipeline
+        if config.defense in ("dfc", "dfc_url"):
+            from agentdojo.defenses.dfc import DFCBootstrap, DFCToolsExecutor
+
+            tools_loop = ToolsExecutionLoop([DFCToolsExecutor(tool_output_formatter), llm])
+            pipeline = cls([
+                system_message_component,
+                init_query_component,
+                # dfc_url additionally gates browse_webpage/input_to_webpage (URL allowlist)
+                DFCBootstrap(config.suite_name, gate_urls=(config.defense == "dfc_url")),
                 llm,
                 tools_loop,
             ])
