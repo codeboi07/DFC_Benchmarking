@@ -26,8 +26,8 @@ def test_invalid_extraction_keys_trigger_one_repair_retry():
     llm.register(
         PreambleExtraction,
         [
-            PreambleExtraction(facts={"BadKey": "alice@example.com"}),
-            PreambleExtraction(facts={"authorized_recipient_email": "alice@example.com"}),
+            PreambleExtraction.from_dict({"BadKey": "alice@example.com"}),
+            PreambleExtraction.from_dict({"authorized_recipient_email": "alice@example.com"}),
         ],
     )
     facts = extract_preamble_facts(llm, model="fake-model", preamble="task")
@@ -40,8 +40,8 @@ def test_extraction_fails_closed_after_repair():
     llm.register(
         PreambleExtraction,
         [
-            PreambleExtraction(facts={"BadKey": "value"}),
-            PreambleExtraction(facts={"AlsoBad": "value"}),
+            PreambleExtraction.from_dict({"BadKey": "value"}),
+            PreambleExtraction.from_dict({"AlsoBad": "value"}),
         ],
     )
     with pytest.raises(ExtractionError):

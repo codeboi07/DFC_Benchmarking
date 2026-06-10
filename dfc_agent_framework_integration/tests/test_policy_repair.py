@@ -30,7 +30,7 @@ def test_invalid_pgn_triggers_repair(send_email_runtime):
     llm = FakeStructuredLLMClient()
     llm.register(
         PreambleExtraction,
-        [PreambleExtraction(facts={"authorized_recipient_email": "alice@example.com"})],
+        [PreambleExtraction.from_dict({"authorized_recipient_email": "alice@example.com"})],
     )
     llm.register(
         GeneratedPolicySet,
@@ -78,7 +78,7 @@ def test_runtime_probe_deletes_ilike_policies(send_email_runtime):
     llm = FakeStructuredLLMClient()
     llm.register(
         PreambleExtraction,
-        [PreambleExtraction(facts={"authorized_recipient_email": "alice@example.com"})],
+        [PreambleExtraction.from_dict({"authorized_recipient_email": "alice@example.com"})],
     )
     llm.register(
         GeneratedPolicySet,
@@ -109,6 +109,8 @@ def test_runtime_probe_deletes_ilike_policies(send_email_runtime):
         [
             PolicyRepairDecision(
                 delete=True,
+                repaired_pgn=None,
+                repaired_description=None,
                 rationale="ILIKE with aggregates is unsupported at runtime.",
             )
         ],
@@ -136,7 +138,7 @@ def test_delete_true_drops_only_failed_policy(send_email_runtime, repair_delete_
     llm = FakeStructuredLLMClient()
     llm.register(
         PreambleExtraction,
-        [PreambleExtraction(facts={"authorized_recipient_email": "alice@example.com"})],
+        [PreambleExtraction.from_dict({"authorized_recipient_email": "alice@example.com"})],
     )
     llm.register(
         GeneratedPolicySet,

@@ -16,6 +16,7 @@ Rules:
 - If the prompt is broad, extract the constraint phrase as text.
 - Return at least one fact.
 - All values must be strings.
+- Return facts as a list of objects with `key` and `value` fields.
 """
 
 POLICY_EXAMPLES = """

@@ -38,8 +38,8 @@ def standard_extraction_llm() -> FakeStructuredLLMClient:
     llm.register(
         PreambleExtraction,
         [
-            PreambleExtraction(
-                facts={
+            PreambleExtraction.from_dict(
+                {
                     "authorized_recipient_email": "alice@example.com",
                 }
             )
@@ -95,6 +95,8 @@ def repair_delete_llm() -> FakeStructuredLLMClient:
         [
             PolicyRepairDecision(
                 delete=True,
+                repaired_pgn=None,
+                repaired_description=None,
                 rationale="Cannot express policy with available columns.",
             )
         ],

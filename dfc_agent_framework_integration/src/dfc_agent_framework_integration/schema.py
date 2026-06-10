@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class BenchmarkTaskContext(BaseModel):
@@ -14,27 +14,49 @@ class BenchmarkTaskContext(BaseModel):
     preamble: str
 
 
+class PreambleFact(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    key: str = Field(description="Stable snake_case identifier for the extracted fact.")
+    value: str = Field(description="Exact value or phrase from the preamble.")
+
+
 class PreambleExtraction(BaseModel):
-    facts: dict[str, str]
+    model_config = ConfigDict(extra="forbid")
+
+    facts: list[PreambleFact] = Field(
+        min_length=1,
+        description="Extracted preamble facts as explicit key/value pairs.",
+    )
+
+    @classmethod
+    def from_dict(cls, facts: dict[str, str]) -> PreambleExtraction:
+        return cls(facts=[PreambleFact(key=key, value=value) for key, value in facts.items()])
 
 
 class GeneratedPolicy(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     policy_id: str
     pgn: str
     description: str
     applies_to_relation: str
-    applies_to_event: str | None = None
+    applies_to_event: str | None
     rationale: str
 
 
 class GeneratedPolicySet(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     policies: list[GeneratedPolicy]
 
 
 class PolicyRepairDecision(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     delete: bool
-    repaired_pgn: str | None = None
-    repaired_description: str | None = None
+    repaired_pgn: str | None
+    repaired_description: str | None
     rationale: str
 
 

@@ -69,7 +69,7 @@ def _combined_llm() -> FakeStructuredLLMClient:
     llm = FakeStructuredLLMClient()
     llm.register(
         PreambleExtraction,
-        [PreambleExtraction(facts={"authorized_recipient_email": "alice@example.com"})],
+        [PreambleExtraction.from_dict({"authorized_recipient_email": "alice@example.com"})],
     )
     llm.register(
         GeneratedPolicySet,
@@ -235,7 +235,7 @@ def _response_policy_llm() -> FakeStructuredLLMClient:
     llm = FakeStructuredLLMClient()
     llm.register(
         PreambleExtraction,
-        [PreambleExtraction(facts={"authorized_recipient_email": "alice@example.com"})],
+        [PreambleExtraction.from_dict({"authorized_recipient_email": "alice@example.com"})],
     )
     llm.register(
         GeneratedPolicySet,
@@ -340,7 +340,7 @@ def test_prompt_guard_feeds_violation_to_llm_and_returns_assistant_message():
     prompt_llm = FakeStructuredLLMClient()
     prompt_llm.register(
         PreambleExtraction,
-        [PreambleExtraction(facts={"authorized_recipient_email": "alice@example.com"})],
+        [PreambleExtraction.from_dict({"authorized_recipient_email": "alice@example.com"})],
     )
     prompt_llm.register(
         GeneratedPolicySet,
@@ -404,7 +404,7 @@ def test_prompt_guard_full_pipeline_produces_assistant_message():
     prompt_llm = FakeStructuredLLMClient()
     prompt_llm.register(
         PreambleExtraction,
-        [PreambleExtraction(facts={"authorized_recipient_email": "alice@example.com"})],
+        [PreambleExtraction.from_dict({"authorized_recipient_email": "alice@example.com"})],
     )
     prompt_llm.register(
         GeneratedPolicySet,
