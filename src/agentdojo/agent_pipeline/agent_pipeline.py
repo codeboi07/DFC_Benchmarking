@@ -55,6 +55,7 @@ DEFENSES = [
     "progent",
     "dfc",
     "dfc_url",  # KILLED EXPERIMENT (URL allowlist self-certifies) — see devnotes/url_policy_prototype_spec.md
+    "dfc_agent_framework_integration",
 ]
 """Available defenses."""
 
@@ -602,6 +603,31 @@ class AgentPipeline(BasePipelineElement):
                 DFCBootstrap(config.suite_name, gate_urls=(config.defense == "dfc_url")),
                 llm,
                 tools_loop,
+            ])
+            pipeline.name = f"{llm_name}-{config.defense}"
+            return pipeline
+        if config.defense == "dfc_agent_framework_integration":
+            from agentdojo.integrations.dfc_agent_framework_integration import (
+                AgentDojoDFCBootstrap,
+                AgentDojoDFCPromptGuard,
+                AgentDojoDFCResponseValidator,
+                AgentDojoDFCToolsExecutor,
+            )
+            from dfc_agent_framework_integration.llm import OpenAIStructuredLLMClient
+
+            if not isinstance(llm, OpenAILLM):
+                raise ValueError("dfc_agent_framework_integration defense requires an OpenAI model with structured outputs")
+            model_name = llm_name if isinstance(llm_name, str) else llm.model
+            structured_llm = OpenAIStructuredLLMClient(llm.client, model_name)
+            guarded_llm = AgentDojoDFCPromptGuard(llm)
+            tools_loop = ToolsExecutionLoop([AgentDojoDFCToolsExecutor(tool_output_formatter), guarded_llm])
+            pipeline = cls([
+                system_message_component,
+                init_query_component,
+                AgentDojoDFCBootstrap(config.suite_name, structured_llm, model_name),
+                guarded_llm,
+                tools_loop,
+                AgentDojoDFCResponseValidator(guarded_llm, max_retries=2),
             ])
             pipeline.name = f"{llm_name}-{config.defense}"
             return pipeline

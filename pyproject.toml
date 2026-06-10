@@ -33,6 +33,7 @@ dependencies = [
     "jsonref>=1.1.0",
     "openapi-pydantic>=0.5.1",
     "json_repair>=0.55.1",
+    "dfc-agent-framework-integration",
 ]
 readme = "README.md"
 requires-python = ">= 3.10"
@@ -93,6 +94,12 @@ docs = [
 
 [tool.uv]
 managed = true
+
+[tool.uv.workspace]
+members = [".", "dfc_agent_framework_integration"]
+
+[tool.uv.sources]
+dfc-agent-framework-integration = { workspace = true }
 
 [tool.hatch.metadata]
 allow-direct-references = true

@@ -381,18 +381,30 @@ class TaskSuite(Generic[Env]):
         runtime = runtime_class(self.tools)
         model_output = None
         messages = []
-        for _ in range(3):
-            # Run the user task
-            try:
-                _, _, task_environment, messages, _ = agent_pipeline.query(prompt, runtime, task_environment)
-            except AbortAgentError as e:
-                # get last environment and messages
-                task_environment = e.task_environment
-                messages = e.messages
+        extra_args: dict = {}
+        try:
+            for _ in range(3):
+                prior_context = extra_args.get("dfc_context")
+                if prior_context is not None and hasattr(prior_context, "close"):
+                    prior_context.close()
+                    extra_args = {key: value for key, value in extra_args.items() if key != "dfc_context"}
+                # Run the user task
+                try:
+                    _, _, task_environment, messages, extra_args = agent_pipeline.query(
+                        prompt, runtime, task_environment, extra_args=extra_args
+                    )
+                except AbortAgentError as e:
+                    # get last environment and messages
+                    task_environment = e.task_environment
+                    messages = e.messages
 
-            model_output = model_output_from_messages(messages)
-            if model_output is not None:
-                break
+                model_output = model_output_from_messages(messages)
+                if model_output is not None:
+                    break
+        finally:
+            dfc_context = extra_args.get("dfc_context")
+            if dfc_context is not None and hasattr(dfc_context, "close"):
+                dfc_context.close()
 
         if model_output is None:
             warnings.warn(f"Model output was None for task {user_task.ID}")
