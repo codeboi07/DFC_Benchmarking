@@ -699,7 +699,7 @@ wheels = [
 
 [[package]]
 name = "data-flow-control"
-version = "0.1.2"
+version = "0.1.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "boto3" },
@@ -709,23 +709,23 @@ dependencies = [
     { name = "numpy" },
     { name = "sqlglot" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/60/ae/14887d4fa71eccf626c9fb941f93ec3298a5a810b350a56f8954d53d3467/data_flow_control-0.1.2.tar.gz", hash = "sha256:db032e83eb4cfd7adc07485b303736d5804ec6cd18ff99595002b4320911ad4d", size = 203625, upload-time = "2026-06-07T18:55:46.567Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/6e/6a/51498f4ff880666b0c22f4a4d4a3d72647a8b838b50cbf0011c11df48098/data_flow_control-0.1.3.tar.gz", hash = "sha256:dd47d361f9ac191954550d2b20c55abc6bd0a7abaa7e96e7428117e243566713", size = 204473, upload-time = "2026-06-11T01:07:42.632Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/76/6b/802447c275d000b6edb7cdbba0f37ce0e288e022288b99ac6ec61663567b/data_flow_control-0.1.2-cp39-abi3-macosx_10_12_x86_64.whl", hash = "sha256:5f72d53c1cd93580eff3d550167219453b33b943f978f5a036d52fef8e0b4aaa", size = 3392230, upload-time = "2026-06-07T18:55:47.66Z" },
-    { url = "https://files.pythonhosted.org/packages/18/d8/28e057f8ec3627200498b2fa7297ad1476f1a5a3e752cf9ead3a24084102/data_flow_control-0.1.2-cp39-abi3-macosx_11_0_arm64.whl", hash = "sha256:21c59a75be08b35b79e8839160bac313377901df0750a8b9c9c14b50b64ab770", size = 3125507, upload-time = "2026-06-07T18:55:50.253Z" },
-    { url = "https://files.pythonhosted.org/packages/33/e2/0a25a24fa8ac379c6c18c6d77e7638151211596fd384891a72e8722c0c44/data_flow_control-0.1.2-cp39-abi3-manylinux_2_28_aarch64.whl", hash = "sha256:bf5ead8970d57ff179110207af84e5feed6f3a13afd655256f5e4cbeebc9fcb4", size = 3362055, upload-time = "2026-06-07T18:55:43.875Z" },
-    { url = "https://files.pythonhosted.org/packages/e6/ab/ea308c7bd5b950b614c087535f4b6de5e9b1c37c757e6df597edb1d70baa/data_flow_control-0.1.2-cp39-abi3-manylinux_2_28_armv7l.whl", hash = "sha256:69e3dbc129dee446fe8d14908d7a95267cccdcb81f3d70b019bfeadeecad9815", size = 3343539, upload-time = "2026-06-07T18:55:51.555Z" },
-    { url = "https://files.pythonhosted.org/packages/b8/fe/372a5b12a431d32c2d0da2a809b95278acc86ac827f2354e5b032f80354a/data_flow_control-0.1.2-cp39-abi3-manylinux_2_28_i686.whl", hash = "sha256:b2fe3f8062c953d5e40de25d7fa465a36bbac24a733f21b6a32df609343d0f73", size = 3894599, upload-time = "2026-06-07T18:56:03.301Z" },
-    { url = "https://files.pythonhosted.org/packages/1f/46/cb30a0fe6a71a983c5cf335c6a4db702eed2e83b4edb1a50898c9d937154/data_flow_control-0.1.2-cp39-abi3-manylinux_2_28_ppc64le.whl", hash = "sha256:49d9968fd9cab1dfe4f53bc331b000420bca2ddc37b782c6782d900262ad15a3", size = 4037099, upload-time = "2026-06-07T18:55:45.302Z" },
-    { url = "https://files.pythonhosted.org/packages/88/4e/401b9958539189be61fd18b5c7a64219c18575de98d005ffe7e227a8d554/data_flow_control-0.1.2-cp39-abi3-manylinux_2_28_s390x.whl", hash = "sha256:7d5bcc1e82bd840046fe127a6ec8e3cd6eb5dc946094e57d0e5aa5eacb90e0da", size = 3323533, upload-time = "2026-06-07T18:55:59.076Z" },
-    { url = "https://files.pythonhosted.org/packages/a1/38/d164ad1e717e2ded8a75c1d076002c02d3c84f895a6d085623226189fb48/data_flow_control-0.1.2-cp39-abi3-manylinux_2_28_x86_64.whl", hash = "sha256:403b1ab5e09c4a6632c4db97a71a9d0e43601fc84f46d374af754903d18a85a8", size = 3592753, upload-time = "2026-06-07T18:55:52.929Z" },
-    { url = "https://files.pythonhosted.org/packages/c0/1d/45e269de8d58455b6884b2b9ef41837d0e7e2f2c63101680bbd957357f2f/data_flow_control-0.1.2-cp39-abi3-musllinux_1_2_aarch64.whl", hash = "sha256:f7b368b6ab014497a5a42afbf9cc215716399ccdc4604b50542d4f8baaf8c556", size = 3539840, upload-time = "2026-06-07T18:55:55.461Z" },
-    { url = "https://files.pythonhosted.org/packages/3d/70/467de97f5e537a5b0f448bbdc4c0d993f2bba2811ec9c59cdbb5d243bdff/data_flow_control-0.1.2-cp39-abi3-musllinux_1_2_armv7l.whl", hash = "sha256:06883cf5f3c8a5181a29fdf42765debb8e4e64a42bdbe74029ef46abf77de8cd", size = 3614734, upload-time = "2026-06-07T18:56:00.404Z" },
-    { url = "https://files.pythonhosted.org/packages/85/ba/4ccc49a469cf4a42061b8e95ce2527ab81a8c393a6f7fdb8d645a9a7d1d9/data_flow_control-0.1.2-cp39-abi3-musllinux_1_2_i686.whl", hash = "sha256:58f2ff6194ab641dbca6a8ce678846dade2acbcfe5e39aec7d6f67f98e2ed336", size = 3866913, upload-time = "2026-06-07T18:55:48.917Z" },
-    { url = "https://files.pythonhosted.org/packages/99/47/cff3ebae61e945443c3597d3bc2dd7d685b6d4fa90700e7e13d434b31623/data_flow_control-0.1.2-cp39-abi3-musllinux_1_2_x86_64.whl", hash = "sha256:04537dd83e8c76d86dcf8db7613d4e27d4787a43d6f4b3f2f76c1c1728500532", size = 3736675, upload-time = "2026-06-07T18:55:54.224Z" },
-    { url = "https://files.pythonhosted.org/packages/c0/64/23dafe6c62675a02ca83ced222246ef35cf71dea4a1f352037ea440c7a74/data_flow_control-0.1.2-cp39-abi3-win32.whl", hash = "sha256:3defb567e786caa425ea75abd9e877b1d748fe58a10b09e563f25ad1ee682a41", size = 2850787, upload-time = "2026-06-07T18:55:57.908Z" },
-    { url = "https://files.pythonhosted.org/packages/d5/50/91479e45d33564da533ee981e8d81c70367fed21b46877e32b2ed0c18f81/data_flow_control-0.1.2-cp39-abi3-win_amd64.whl", hash = "sha256:3810e8668a9ffa17aad8492ff81957d1abbffc4e7ce28f2b62884112be66ac3d", size = 3268748, upload-time = "2026-06-07T18:55:56.764Z" },
-    { url = "https://files.pythonhosted.org/packages/fd/60/37af3c9be2572f5ea8fbb77fb517ea8de131b6bac1954cb1edfa025e3a2d/data_flow_control-0.1.2-cp39-abi3-win_arm64.whl", hash = "sha256:f42aa90ba1fcb188f5a92e42e9d8e69e7412cfc4a0118314e0f66be79111e41b", size = 2941199, upload-time = "2026-06-07T18:56:02.024Z" },
+    { url = "https://files.pythonhosted.org/packages/f5/96/7dd915858829196937311d68bc802593a9531d47a5b451d8a095935908f2/data_flow_control-0.1.3-cp39-abi3-macosx_10_12_x86_64.whl", hash = "sha256:5ac5de69dcee371c7ee0cd719f15661626c9c9a764055df870cb74ceba13f3d9", size = 3392178, upload-time = "2026-06-11T01:07:36.566Z" },
+    { url = "https://files.pythonhosted.org/packages/d9/0f/1214f6b6daceb52eb3c43aaf22ceb723bf6e8ad79aba47c1b0a2c51124fc/data_flow_control-0.1.3-cp39-abi3-macosx_11_0_arm64.whl", hash = "sha256:45f70ff2241b3936bfc5cc23d3dc3f82134e36351a8481d4476835d90c3f47af", size = 3135121, upload-time = "2026-06-11T01:07:48.563Z" },
+    { url = "https://files.pythonhosted.org/packages/ac/31/9333f793c236c580a1640f28b1ca0b6396290cc0243af439fcaae0e7a3b6/data_flow_control-0.1.3-cp39-abi3-manylinux_2_28_aarch64.whl", hash = "sha256:10b188bf2f2848dbf9c08dd13b0f005c0c3fe6856cf1e7ffcc68496ded5496f2", size = 3361220, upload-time = "2026-06-11T01:07:50.985Z" },
+    { url = "https://files.pythonhosted.org/packages/03/2a/d526fbc84a97d4109478560d00179a83227b2b0ff229de5749d792567aa3/data_flow_control-0.1.3-cp39-abi3-manylinux_2_28_armv7l.whl", hash = "sha256:9f7275edc8bc5eb02fa61ecae0325d1233dec312a773eec0a03bcf3ae72412fd", size = 3353246, upload-time = "2026-06-11T01:07:55.978Z" },
+    { url = "https://files.pythonhosted.org/packages/8c/3d/8eca6a6319710116be4cec3f77ba87927ab11bb0978c1ce48405b9437b55/data_flow_control-0.1.3-cp39-abi3-manylinux_2_28_i686.whl", hash = "sha256:ab40dcc1aa1024ca0513e03fcbceb9a007d18a7e8f6bcc1d2e18128af8fbda2a", size = 3896018, upload-time = "2026-06-11T01:07:43.997Z" },
+    { url = "https://files.pythonhosted.org/packages/ba/7d/94b5db17cb588d7db1c55435fe90a1583bce4bd3b3ea89d61ffa0a4b69af/data_flow_control-0.1.3-cp39-abi3-manylinux_2_28_ppc64le.whl", hash = "sha256:4229f1ddfbfbe1b2af4213b65dfa602ec732c1d6334b3e5089d0a5cff41a0db5", size = 4043483, upload-time = "2026-06-11T01:07:47.102Z" },
+    { url = "https://files.pythonhosted.org/packages/55/39/9752705982fb54092966eff2cfea81aa530e7315db4ebfed4dfc8d7a2fb1/data_flow_control-0.1.3-cp39-abi3-manylinux_2_28_s390x.whl", hash = "sha256:31792ce82af9a543fbe96d229601694832b0147545bb328d49994776c1411e8e", size = 3327629, upload-time = "2026-06-11T01:07:52.462Z" },
+    { url = "https://files.pythonhosted.org/packages/e2/0b/56e1c82d79660d022d120defc2fbb916ea6752e38241b86b3321b45ae3af/data_flow_control-0.1.3-cp39-abi3-manylinux_2_28_x86_64.whl", hash = "sha256:395a71fe20675ebe92dc008200fb2eb3ebd9f197290ece915868575ff44eec08", size = 3603600, upload-time = "2026-06-11T01:07:35.097Z" },
+    { url = "https://files.pythonhosted.org/packages/e0/30/24f04182e23f3b458e296300e30b25e97f171aee273ea8370cf2a99181b6/data_flow_control-0.1.3-cp39-abi3-musllinux_1_2_aarch64.whl", hash = "sha256:225a32d27fe6cdbaa60dadb6840d7b057516cef2ebfedc65afa8471ccd31ce9a", size = 3537705, upload-time = "2026-06-11T01:07:33.647Z" },
+    { url = "https://files.pythonhosted.org/packages/d1/fc/30a5cf49270b3dd88bd3887d155a712d7197eedc4c013a1084cd2784967f/data_flow_control-0.1.3-cp39-abi3-musllinux_1_2_armv7l.whl", hash = "sha256:53ccade2837fb85387c77bc2a1aa387901051980ec3a4a213c397ab94f201594", size = 3625132, upload-time = "2026-06-11T01:07:41.374Z" },
+    { url = "https://files.pythonhosted.org/packages/73/c3/fc065c5079a9fe086cc7159e5cb5d96019402868b65348637a7c1f9f541f/data_flow_control-0.1.3-cp39-abi3-musllinux_1_2_i686.whl", hash = "sha256:666b0185d050fd2d4b87e906a99a5350239a835b8d29ae90c3d7f76e84a861d2", size = 3863314, upload-time = "2026-06-11T01:07:38.41Z" },
+    { url = "https://files.pythonhosted.org/packages/f2/2c/65a91f3ee6986e6bad94fd98be7619698ae362223176b7dc0c2f02e75e04/data_flow_control-0.1.3-cp39-abi3-musllinux_1_2_x86_64.whl", hash = "sha256:d0e88d2e67115f31d24b3fe3b860602eae0d01049ceaeb48027b9894b23db170", size = 3748942, upload-time = "2026-06-11T01:07:45.571Z" },
+    { url = "https://files.pythonhosted.org/packages/1a/52/14c21ab5ec90860bbb1976f527f3e255ecae2e75cfe24ecca947067e7bb9/data_flow_control-0.1.3-cp39-abi3-win32.whl", hash = "sha256:98beb564d141927e1e2e6806e34e859365538e9b69ebfc5ae6c5726910bc4506", size = 2819854, upload-time = "2026-06-11T01:07:39.905Z" },
+    { url = "https://files.pythonhosted.org/packages/44/fd/3a034add9fb5a3bae9e415f9cfd2f37158d5e1c03dca1300a91fd5d81cfd/data_flow_control-0.1.3-cp39-abi3-win_amd64.whl", hash = "sha256:156b3965da8caf5ce0d7fa561366c6393b91253d77c0080ab16ac4f6539cd088", size = 3265743, upload-time = "2026-06-11T01:07:32.027Z" },
+    { url = "https://files.pythonhosted.org/packages/62/59/1d8b34f19167605fe3f1f45d0bfa110e6c82da49c63de9f6dde1fe3f9bdd/data_flow_control-0.1.3-cp39-abi3-win_arm64.whl", hash = "sha256:796fbdb5b28c7938e19e52b5dbcc31fb5ad6a23939fb6fc2c18fab116258e8c5", size = 2931719, upload-time = "2026-06-11T01:07:53.913Z" },
 ]
 
 [[package]]
@@ -795,7 +795,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "data-flow-control", specifier = ">=0.1.2" },
+    { name = "data-flow-control", specifier = ">=0.1.3" },
     { name = "openai", specifier = ">=1.59.7" },
     { name = "pydantic", specifier = ">=2.7.1" },
 ]

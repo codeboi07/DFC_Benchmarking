@@ -13,7 +13,7 @@ def test_policy_generation_registers_valid_policies(send_email_runtime, combined
         ),
         runtime_schema=RuntimeSchema.from_tools(send_email_runtime.functions),
         llm=combined_llm,
-        model="fake-model",
+        dfc_model="fake-model",
         functions=send_email_runtime.functions,
     )
     try:

@@ -503,6 +503,8 @@ class PipelineConfig(BaseModel):
     """Format to use for tool outputs. If not provided, the default format is yaml."""
     suite_name: str | None = None
     """Suite name, used by external defense adapters when needed."""
+    dfc_model: str | None = None
+    """Model for DFC preamble extraction, policy generation, and repair. Defaults to the agent `llm` model."""
 
     @model_validator(mode="after")
     def validate_system_message(self) -> Self:
@@ -617,14 +619,20 @@ class AgentPipeline(BasePipelineElement):
 
             if not isinstance(llm, OpenAILLM):
                 raise ValueError("dfc_agent_framework_integration defense requires an OpenAI model with structured outputs")
-            model_name = llm_name if isinstance(llm_name, str) else llm.model
-            structured_llm = OpenAIStructuredLLMClient(llm.client, model_name)
+            agent_model_name = llm_name if isinstance(llm_name, str) else llm.model
+            dfc_model_name = config.dfc_model or agent_model_name
+            structured_llm = OpenAIStructuredLLMClient(llm.client, dfc_model_name)
             guarded_llm = AgentDojoDFCPromptGuard(llm)
             tools_loop = ToolsExecutionLoop([AgentDojoDFCToolsExecutor(tool_output_formatter), guarded_llm])
             pipeline = cls([
                 system_message_component,
                 init_query_component,
-                AgentDojoDFCBootstrap(config.suite_name, structured_llm, model_name),
+                AgentDojoDFCBootstrap(
+                    config.suite_name,
+                    structured_llm,
+                    dfc_model_name,
+                    agent_model=agent_model_name,
+                ),
                 guarded_llm,
                 tools_loop,
                 AgentDojoDFCResponseValidator(guarded_llm, max_retries=2),

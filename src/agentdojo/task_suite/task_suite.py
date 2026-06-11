@@ -403,8 +403,15 @@ class TaskSuite(Generic[Env]):
                     break
         finally:
             dfc_context = extra_args.get("dfc_context")
-            if dfc_context is not None and hasattr(dfc_context, "close"):
-                dfc_context.close()
+            if dfc_context is not None:
+                try:
+                    from agentdojo.integrations.dfc_agent_framework_integration import export_dfc_context_to_run_log
+
+                    export_dfc_context_to_run_log(dfc_context)
+                except ImportError:
+                    pass
+                if hasattr(dfc_context, "close"):
+                    dfc_context.close()
 
         if model_output is None:
             warnings.warn(f"Model output was None for task {user_task.ID}")

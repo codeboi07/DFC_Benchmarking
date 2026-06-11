@@ -37,12 +37,26 @@ class PreambleExtraction(BaseModel):
 class GeneratedPolicy(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    policy_id: str
-    pgn: str
-    description: str
-    applies_to_relation: str
-    applies_to_event: str | None
-    rationale: str
+    policy_id: str = Field(description="Stable identifier for this policy, such as send_email_recipient.")
+    pgn: str = Field(
+        description=(
+            "Complete executable PGN policy text as newline-separated clauses. "
+            "Must include every required line: SINK (and SOURCE/SOURCE REQUIRED when needed), "
+            "DIMENSION when grounding to preamble or tool output, CONSTRAINT, ON FAIL KILL, "
+            "and DESCRIPTION. Do not put only the SINK line here."
+        ),
+    )
+    description: str = Field(
+        description="Short human-readable summary that should match the DESCRIPTION clause inside pgn.",
+    )
+    applies_to_relation: str = Field(
+        description="Primary sink relation this policy governs, such as SendEmailInput.",
+    )
+    applies_to_event: str | None = Field(
+        default=None,
+        description="Optional event label such as tool_call:send_email.",
+    )
+    rationale: str = Field(description="Why this policy is needed for the task.")
 
 
 class GeneratedPolicySet(BaseModel):
@@ -54,24 +68,47 @@ class GeneratedPolicySet(BaseModel):
 class PolicyRepairDecision(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    delete: bool
-    repaired_pgn: str | None
-    repaired_description: str | None
-    rationale: str
+    delete: bool = Field(
+        description=(
+            "Set true only when the policy cannot be repaired to a valid schema-grounded PGN. "
+            "Do not set true because the trusted task does not use the sink's tool; "
+            "pre-emptive external-sink guards should be repaired, not deleted."
+        ),
+    )
+    repaired_pgn: str | None = Field(
+        default=None,
+        description=(
+            "Complete repaired PGN with SINK, DIMENSION/SOURCE as needed, CONSTRAINT, "
+            "ON FAIL KILL, and DESCRIPTION lines. Required when delete is false."
+        ),
+    )
+    repaired_description: str | None = None
+    rationale: str = Field(
+        description="Explain the repair or, if deleting, why the policy is unrecoverable (not merely unrelated to the task).",
+    )
 
 
 class DFCViolation(BaseModel):
     event_type: str
     relation: str
     attempted_payload: dict[str, Any]
+    policy_ids: list[str] = Field(default_factory=list)
     policy_descriptions: list[str]
     raw_error: str | None = None
+
+
+class ViolationIdentification(BaseModel):
+    policy_ids: list[str] = Field(default_factory=list)
+    policy_descriptions: list[str] = Field(default_factory=list)
 
 
 class RelationSchema(BaseModel):
     name: str
     columns: dict[str, str]
     column_descriptions: dict[str, str] = Field(default_factory=dict)
+    description: str = ""
+    tool_name: str | None = None
+    source_key_by_column: dict[str, str] = Field(default_factory=dict)
 
 
 class RuntimeSchema(BaseModel):
@@ -82,7 +119,13 @@ class RuntimeSchema(BaseModel):
     assistant_response_relation: RelationSchema | None = None
 
     @classmethod
-    def from_tools(cls, functions: dict[str, Any]) -> RuntimeSchema:
+    def from_tools(
+        cls,
+        functions: dict[str, Any],
+        *,
+        functions_runtime: Any | None = None,
+        env: Any | None = None,
+    ) -> RuntimeSchema:
         from dfc_agent_framework_integration.events import (
             assistant_response_relation,
             column_specs_from_function,
@@ -101,14 +144,23 @@ class RuntimeSchema(BaseModel):
                     name=input_table_name(name),
                     columns=input_cols,
                     column_descriptions=input_descriptions,
+                    description=function.description,
+                    tool_name=name,
                 )
             )
-            output_cols, output_descriptions = column_specs_from_return_type(function)
+            output_cols, output_descriptions, source_key_by_column = column_specs_from_return_type(
+                function,
+                functions_runtime=functions_runtime,
+                env=env,
+            )
             tool_outputs.append(
                 RelationSchema(
                     name=output_table_name(name),
                     columns=output_cols,
                     column_descriptions=output_descriptions,
+                    description=function.description,
+                    tool_name=name,
+                    source_key_by_column=source_key_by_column,
                 )
             )
         return cls(
@@ -138,9 +190,17 @@ class DeletedPolicyRecord(BaseModel):
     error: str | None = None
 
 
+class PolicyRegistrationRecord(BaseModel):
+    policy_id: str
+    repair_attempts: int
+    outcome: Literal["registered", "deleted"]
+
+
 class DFCTaskDiagnostics(BaseModel):
     extracted_facts: dict[str, str] = Field(default_factory=dict)
     generated_policies: list[GeneratedPolicy] = Field(default_factory=list)
     registered_policy_ids: list[str] = Field(default_factory=list)
     deleted_policies: list[DeletedPolicyRecord] = Field(default_factory=list)
+    policy_registration: list[PolicyRegistrationRecord] = Field(default_factory=list)
+    policy_fire_counts: dict[str, int] = Field(default_factory=dict)
     validation_events: list[dict[str, Any]] = Field(default_factory=list)

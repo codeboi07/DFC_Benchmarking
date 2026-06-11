@@ -12,9 +12,7 @@ def materialize_preamble_data(raw_conn: Any, facts: dict[str, str], relation_nam
     raw_conn.execute(f"DROP TABLE IF EXISTS {quoted_relation}")
     if not facts:
         raise ValueError("Cannot materialize empty preamble facts")
-    col_defs = ", ".join(
-        f"{quote_identifier(key)} VARCHAR" for key in facts
-    )
+    col_defs = ", ".join(f"{quote_identifier(key)} VARCHAR" for key in facts)
     raw_conn.execute(f"CREATE TABLE {quoted_relation} ({col_defs})")
     columns = list(facts.keys())
     placeholders = ", ".join("?" for _ in columns)

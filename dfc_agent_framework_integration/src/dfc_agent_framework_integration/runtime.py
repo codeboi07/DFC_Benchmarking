@@ -7,14 +7,15 @@ from dfc_agent_framework_integration.events import (
     PROMPT_INPUT_RELATION,
     attempt_write_event_row,
     build_insert_row,
-    clear_relation_rows,
     expand_payload_rows,
     input_table_name,
     new_event_id,
+    output_table_name,
     quote_identifier,
+    record_tool_output_row,
 )
 from dfc_agent_framework_integration.schema import DFCViolation, GeneratedPolicy, RuntimeSchema
-from dfc_agent_framework_integration.validation import identify_violated_policy_descriptions
+from dfc_agent_framework_integration.validation import identify_violated_policies
 
 
 class DFCRuntimeValidator:
@@ -35,8 +36,9 @@ class DFCRuntimeValidator:
         self.registered_policy_ids = registered_policy_ids
         self.preamble_facts = preamble_facts
         self.task_id = task_id
-        self._relation_columns = {
-            relation.name: relation.columns for relation in runtime_schema.all_relations()
+        self._relation_columns = {relation.name: relation.columns for relation in runtime_schema.all_relations()}
+        self._output_source_keys = {
+            relation.name: relation.source_key_by_column for relation in runtime_schema.tool_output_relations
         }
 
     def validate_tool_call(self, tool_name: str, args: dict[str, Any]) -> DFCViolation | None:
@@ -61,7 +63,6 @@ class DFCRuntimeValidator:
 
         relation_columns = self._relation_columns[relation]
         payload_rows = expand_payload_rows(payload, relation_columns)
-        clear_relation_rows(self.raw_conn, relation)
         event_id = new_event_id()
         blocked_row: dict[str, Any] | None = None
         raw_error: str | None = None
@@ -97,21 +98,34 @@ class DFCRuntimeValidator:
         if blocked_row is None:
             return None
 
-        descriptions = identify_violated_policy_descriptions(
+        identification = identify_violated_policies(
             relation_name=relation,
-            attempted_row=blocked_row,
-            relation_columns=relation_columns,
             generated_policies=self.generated_policies,
             registered_policy_ids=self.registered_policy_ids,
-            preamble_facts=self.preamble_facts,
             raw_error=raw_error,
         )
         return DFCViolation(
             event_type=event_type,
             relation=relation,
             attempted_payload=payload,
-            policy_descriptions=descriptions,
+            policy_ids=identification.policy_ids,
+            policy_descriptions=identification.policy_descriptions,
             raw_error=raw_error,
+        )
+
+    def record_tool_output(self, tool_name: str, result: Any) -> None:
+        relation_name = output_table_name(tool_name)
+        if relation_name not in self._relation_columns:
+            return
+        record_tool_output_row(
+            self.raw_conn,
+            relation_name,
+            self._relation_columns[relation_name],
+            result,
+            event_id=new_event_id(),
+            task_id=self.task_id,
+            tool_name=tool_name,
+            source_key_by_column=self._output_source_keys.get(relation_name),
         )
 
     def validate_assistant_response(self, content: str) -> DFCViolation | None:

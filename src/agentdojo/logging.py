@@ -5,6 +5,7 @@ import os
 import textwrap
 import time
 import warnings
+from pathlib import Path
 
 from pydantic import BaseModel
 from rich.live import Live
@@ -194,6 +195,27 @@ class TraceLogger(Logger):
             self.set_contextarg("duration", None)
 
         return super().__exit__(exc_type, exc_value, traceback)
+
+    def task_log_json_path(self) -> Path | None:
+        suite_name = self.context.get("suite_name", "unknown_suite_name")
+        user_task_id = self.context.get("user_task_id", "unknown_user_task_id")
+        injection_task_id = self.context.get("injection_task_id", "unknown_injection_task_id")
+        attack_type = self.context.get("attack_type")
+        pipeline_name = self.context.get("pipeline_name")
+
+        if attack_type is None or pipeline_name is None:
+            return None
+
+        pipeline_name = str(pipeline_name).replace("/", "_")
+        directory = Path(self.dirpath) / pipeline_name / suite_name / user_task_id / attack_type
+        stem = injection_task_id or "none"
+        return directory / f"{stem}.json"
+
+    def dfc_artifact_dir(self) -> Path | None:
+        task_log_path = self.task_log_json_path()
+        if task_log_path is None:
+            return None
+        return task_log_path.parent / f"{task_log_path.stem}_dfc"
 
     def set_contextarg(self, key, value):
         self.context[key] = value

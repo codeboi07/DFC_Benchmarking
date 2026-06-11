@@ -19,7 +19,13 @@ from agentdojo.integrations.dfc_agent_framework_integration import (
 )
 from dfc_agent_framework_integration.context import DFCBenchmarkContext
 from dfc_agent_framework_integration.llm import FakeStructuredLLMClient
-from dfc_agent_framework_integration.schema import GeneratedPolicy, GeneratedPolicySet, PreambleExtraction
+from dfc_agent_framework_integration.schema import (
+    BenchmarkTaskContext,
+    GeneratedPolicy,
+    GeneratedPolicySet,
+    PreambleExtraction,
+    RuntimeSchema,
+)
 from agentdojo.functions_runtime import EmptyEnv, FunctionCall, FunctionsRuntime, make_function
 from agentdojo.types import (
     ChatAssistantMessage,
@@ -112,9 +118,32 @@ def test_pipeline_config_accepts_dfc_agent_framework_integration_defense():
     assert "dfc_agent_framework_integration" in pipeline.name
 
 
+def test_pipeline_config_uses_separate_dfc_model():
+    mock_client = MagicMock()
+    llm = OpenAILLM(mock_client, "gpt-4o-2024-08-06")
+    config = PipelineConfig(
+        llm=llm,
+        model_id=None,
+        defense="dfc_agent_framework_integration",
+        dfc_model="gpt-5.2",
+        system_message_name=None,
+        system_message="You are a helpful assistant.",
+        suite_name="shopping",
+    )
+    pipeline = AgentPipeline.from_config(config)
+    bootstrap = next(element for element in pipeline.elements if isinstance(element, AgentDojoDFCBootstrap))
+    assert bootstrap.dfc_model == "gpt-5.2"
+    assert bootstrap.agent_model == "gpt-4o-2024-08-06"
+
+
 def test_bootstrap_stores_dfc_context_in_extra_args():
     runtime = FunctionsRuntime([make_function(send_email)])
-    bootstrap = AgentDojoDFCBootstrap("shopping", _combined_llm(), "fake-model")
+    bootstrap = AgentDojoDFCBootstrap(
+        "shopping",
+        _combined_llm(),
+        "fake-dfc-model",
+        agent_model="fake-agent-model",
+    )
     _, _, _, _, extra_args = bootstrap.query(
         "Email alice@example.com",
         runtime,
@@ -122,8 +151,11 @@ def test_bootstrap_stores_dfc_context_in_extra_args():
         [{"role": "system", "content": [text_content_block_from_string("sys")]}],
     )
     assert "dfc_context" in extra_args
-    assert isinstance(extra_args["dfc_context"], DFCBenchmarkContext)
-    extra_args["dfc_context"].close()
+    context = extra_args["dfc_context"]
+    assert isinstance(context, DFCBenchmarkContext)
+    assert context.dfc_model == "fake-dfc-model"
+    assert context.agent_model == "fake-agent-model"
+    context.close()
 
 
 def test_tool_executor_blocks_bad_call_and_allows_good_call():
@@ -498,3 +530,43 @@ def test_close_runs_after_success_and_exception():
             if context is not None:
                 context.close()
     assert tracking.closed is True
+
+
+def test_export_dfc_context_to_run_log_writes_artifact_dir(tmp_path):
+    from agentdojo.integrations.dfc_agent_framework_integration import export_dfc_context_to_run_log
+    from agentdojo.logging import NullLogger, TraceLogger
+    from dfc_agent_framework_integration.persistence import DATABASE_FILENAME, METADATA_FILENAME
+
+    runtime = FunctionsRuntime([make_function(send_email)])
+    context = DFCBenchmarkContext.prepare_task(
+        task_context=BenchmarkTaskContext(
+            benchmark_name="agentdyn",
+            suite_name="shopping",
+            task_id="user_task_0",
+            preamble="Email alice@example.com",
+        ),
+        runtime_schema=RuntimeSchema.from_tools(runtime.functions),
+        llm=_combined_llm(),
+        dfc_model="fake-model",
+        functions=runtime.functions,
+    )
+    delegate = NullLogger()
+    delegate.logdir = str(tmp_path)
+    try:
+        with TraceLogger(
+            delegate=delegate,
+            suite_name="shopping",
+            user_task_id="user_task_0",
+            injection_task_id="injection_task_0",
+            injections={},
+            attack_type="important_instructions",
+            pipeline_name="gpt-4o-dfc_agent_framework_integration",
+        ):
+            artifact_dir = export_dfc_context_to_run_log(context)
+
+        assert artifact_dir is not None
+        assert artifact_dir.name == "injection_task_0_dfc"
+        assert (artifact_dir / METADATA_FILENAME).exists()
+        assert (artifact_dir / DATABASE_FILENAME).exists()
+    finally:
+        context.close()

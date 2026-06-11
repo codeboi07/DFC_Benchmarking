@@ -3,7 +3,8 @@ from __future__ import annotations
 import json
 import re
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
+from enum import Enum
 from typing import Any
 
 from pydantic import BaseModel
@@ -107,7 +108,12 @@ def column_specs_from_function(function: BenchmarkTool) -> tuple[dict[str, str],
     return columns, descriptions
 
 
-def column_specs_from_return_type(function: BenchmarkTool) -> tuple[dict[str, str], dict[str, str]]:
+def column_specs_from_return_type(
+    function: BenchmarkTool,
+    *,
+    functions_runtime: Any | None = None,
+    env: Any | None = None,
+) -> tuple[dict[str, str], dict[str, str], dict[str, str]]:
     return_type = function.return_type
     if isinstance(return_type, type) and issubclass(return_type, BaseModel):
         schema = return_type.model_json_schema()
@@ -123,16 +129,23 @@ def column_specs_from_return_type(function: BenchmarkTool) -> tuple[dict[str, st
             if field_description is not None:
                 descriptions[name] = field_description
         if columns:
-            return columns, descriptions
+            return columns, descriptions, {}
+
+    if functions_runtime is not None and env is not None:
+        from dfc_agent_framework_integration.tool_output_probe import probe_dict_output_schema
+
+        probed = probe_dict_output_schema(function, functions_runtime=functions_runtime, env=env)
+        if probed is not None:
+            return probed
 
     return (
         {"__dfc_raw_json": "VARCHAR"},
         {
             "__dfc_raw_json": (
-                f"Serialized tool return value for {function.name!r} "
-                f"({function.description.splitlines()[0]})"
+                f"Serialized tool return value for {function.name!r} ({function.description.splitlines()[0]})"
             )
         },
+        {},
     )
 
 
@@ -178,9 +191,7 @@ def normalize_tool_names(tool_names: list[str]) -> dict[str, str]:
         base = tool_name_to_table_base(name)
         key = base.lower()
         if key in normalized_to_tool and normalized_to_tool[key] != name:
-            raise ValueError(
-                f"Tool names {normalized_to_tool[key]!r} and {name!r} collide after normalization"
-            )
+            raise ValueError(f"Tool names {normalized_to_tool[key]!r} and {name!r} collide after normalization")
         normalized_to_tool[key] = name
         mapping[name] = base
     return mapping
@@ -199,9 +210,7 @@ def _create_staging_table(raw_conn: Any, relation: RelationSchema) -> None:
     if not columns:
         raw_conn.execute(f"CREATE TABLE {quote_identifier(staging_name)} ()")
         return
-    col_defs = ", ".join(
-        f"{quote_identifier(name)} {col_type}" for name, col_type in columns.items()
-    )
+    col_defs = ", ".join(f"{quote_identifier(name)} {col_type}" for name, col_type in columns.items())
     raw_conn.execute(f"CREATE TABLE {quote_identifier(staging_name)} ({col_defs})")
 
 
@@ -215,25 +224,61 @@ def ensure_relation_write_tables(
     _create_staging_table(raw_conn, relation)
 
 
-def build_probe_payload(
+def build_tool_output_payload(
+    result: Any,
     relation_columns: dict[str, str],
-    preamble_facts: dict[str, str],
-) -> dict[str, str]:
-    payload: dict[str, str] = {}
-    for column in relation_columns:
-        if column.startswith("__dfc_"):
-            continue
-        value: str | None = None
-        for key, fact in preamble_facts.items():
-            if column in key or key.endswith(column):
-                value = fact
-                break
-        if value is None:
-            value = preamble_facts.get(f"authorized_{column}") or preamble_facts.get(column)
-        if value is None and preamble_facts:
-            value = next(iter(preamble_facts.values()))
-        payload[column] = value or f"__dfc_probe_{column}"
-    return payload
+    *,
+    source_key_by_column: dict[str, str] | None = None,
+) -> dict[str, Any]:
+    user_columns = {
+        column: column_type for column, column_type in relation_columns.items() if not column.startswith("__dfc_")
+    }
+    if isinstance(result, BaseModel):
+        data = result.model_dump(mode="json")
+        payload = {column: data.get(column) for column in user_columns}
+        if any(value is not None for value in payload.values()):
+            return payload
+    if isinstance(result, dict):
+        payload: dict[str, Any] = {}
+        for column in user_columns:
+            source_key = (source_key_by_column or {}).get(column, column)
+            if source_key in result:
+                payload[column] = to_json_compatible(result[source_key])
+            elif column in result:
+                payload[column] = to_json_compatible(result[column])
+        if any(value is not None for value in payload.values()):
+            return payload
+    if len(user_columns) == 1:
+        column = next(iter(user_columns))
+        return {column: serialize_scalar_value(result)}
+    return {"__dfc_raw_json": serialize_scalar_value(result)}
+
+
+def record_tool_output_row(
+    raw_conn: Any,
+    relation_name: str,
+    relation_columns: dict[str, str],
+    result: Any,
+    *,
+    event_id: str,
+    task_id: str | None,
+    tool_name: str,
+    source_key_by_column: dict[str, str] | None = None,
+) -> None:
+    payload = build_tool_output_payload(
+        result,
+        relation_columns,
+        source_key_by_column=source_key_by_column,
+    )
+    row = build_insert_row(
+        payload,
+        relation_columns,
+        event_id=event_id,
+        task_id=task_id,
+        event_type=f"tool_output:{tool_name}",
+        status="observed",
+    )
+    insert_event_row(raw_conn, relation_name, row)
 
 
 def write_event_row(
@@ -247,15 +292,12 @@ def write_event_row(
     clear_relation_rows(raw_conn, staging)
     insert_event_row(raw_conn, staging, row)
 
-    insert_columns = list(relation_columns.keys()) + [
-        column for column in row if column.startswith("__dfc_")
-    ]
+    insert_columns = list(relation_columns.keys()) + [column for column in row if column.startswith("__dfc_")]
     columns_sql = ", ".join(quote_identifier(column) for column in insert_columns)
     select_sql = ", ".join(f"s.{quote_identifier(column)}" for column in insert_columns)
     sql = (
         f"INSERT INTO {quote_identifier(relation_name)} ({columns_sql}) "
-        f"SELECT {select_sql} FROM {quote_identifier(staging)} AS s "
-        f"CROSS JOIN {quote_identifier(PREAMBLE_RELATION)}"
+        f"SELECT {select_sql} FROM {quote_identifier(staging)} AS s"
     )
     dfc_conn.execute(sql)
 
@@ -300,9 +342,7 @@ def _create_relation_table(
         ddl = f"CREATE TABLE {quote_identifier(relation.name)} ()"
         raw_conn.execute(ddl)
         return
-    col_defs = ", ".join(
-        f"{quote_identifier(name)} {col_type}" for name, col_type in columns.items()
-    )
+    col_defs = ", ".join(f"{quote_identifier(name)} {col_type}" for name, col_type in columns.items())
     ddl = f"CREATE TABLE {quote_identifier(relation.name)} ({col_defs})"
     raw_conn.execute(ddl)
 
@@ -315,12 +355,35 @@ def utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def to_json_compatible(value: Any) -> Any:
+    if value is None:
+        return None
+    if isinstance(value, BaseModel):
+        return value.model_dump(mode="json")
+    if isinstance(value, Enum):
+        return value.value
+    if isinstance(value, datetime | date):
+        return value.isoformat()
+    if isinstance(value, list | tuple):
+        return [to_json_compatible(item) for item in value]
+    if isinstance(value, dict):
+        return {str(key): to_json_compatible(item) for key, item in value.items()}
+    if isinstance(value, str | int | float | bool):
+        return value
+    return str(value)
+
+
 def serialize_scalar_value(value: Any) -> str | None:
     if value is None:
         return None
-    if isinstance(value, dict | list):
-        return json.dumps(value)
-    return str(value)
+    compatible = to_json_compatible(value)
+    if isinstance(compatible, str):
+        return compatible
+    if isinstance(compatible, bool):
+        return "true" if compatible else "false"
+    if isinstance(compatible, int | float):
+        return str(compatible)
+    return json.dumps(compatible)
 
 
 def expand_payload_rows(

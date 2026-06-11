@@ -21,7 +21,7 @@ def _build_context_with_policies(llm: FakeStructuredLLMClient, policies: list[Ge
         ),
         runtime_schema=RuntimeSchema.from_tools(send_email_runtime.functions),
         llm=llm,
-        model="fake-model",
+        dfc_model="fake-model",
         functions=send_email_runtime.functions,
     )
 
@@ -70,11 +70,70 @@ def test_invalid_pgn_triggers_repair(send_email_runtime):
     try:
         assert "bad_policy" in context.registered_policy_ids
         assert any(call["text_format"] is PolicyRepairDecision for call in llm.calls)
+        repair_record = next(
+            record for record in context.diagnostics.policy_registration if record.policy_id == "bad_policy"
+        )
+        assert repair_record.repair_attempts == 1
+        assert repair_record.outcome == "registered"
     finally:
         context.close()
 
 
-def test_runtime_probe_deletes_ilike_policies(send_email_runtime):
+def test_sink_only_pgn_triggers_repair(send_email_runtime):
+    llm = FakeStructuredLLMClient()
+    llm.register(
+        PreambleExtraction,
+        [PreambleExtraction.from_dict({"authorized_recipient_email": "alice@example.com"})],
+    )
+    llm.register(
+        GeneratedPolicySet,
+        [
+            GeneratedPolicySet(
+                policies=[
+                    GeneratedPolicy(
+                        policy_id="sink_only_policy",
+                        pgn="SINK SendEmailInput",
+                        description="Prevent data exfiltration: outbound email may go only to the authorized recipient.",
+                        applies_to_relation="SendEmailInput",
+                        applies_to_event="tool_call:send_email",
+                        rationale="Unauthorized recipients could lead to data exfiltration.",
+                    )
+                ]
+            )
+        ],
+    )
+    llm.register(
+        PolicyRepairDecision,
+        [
+            PolicyRepairDecision(
+                delete=False,
+                repaired_pgn=(
+                    "SINK SendEmailInput\n"
+                    "DIMENSION PreambleData\n"
+                    "CONSTRAINT SendEmailInput.recipient = PreambleData.authorized_recipient_email\n"
+                    "ON FAIL KILL\n"
+                    "DESCRIPTION Prevent data exfiltration: outbound email may go only to the authorized recipient."
+                ),
+                repaired_description="Prevent data exfiltration: outbound email may go only to the authorized recipient.",
+                rationale="Added missing CONSTRAINT and grounding dimension.",
+            )
+        ],
+    )
+    context = _build_context_with_policies(llm, [], send_email_runtime)
+    try:
+        assert "sink_only_policy" in context.registered_policy_ids
+        deleted = context.diagnostics.deleted_policies
+        assert deleted == []
+        repair_record = next(
+            record for record in context.diagnostics.policy_registration if record.policy_id == "sink_only_policy"
+        )
+        assert repair_record.outcome == "registered"
+        assert repair_record.repair_attempts == 1
+    finally:
+        context.close()
+
+
+def test_ilike_policy_registers_and_blocks_at_runtime(send_email_runtime):
     llm = FakeStructuredLLMClient()
     llm.register(
         PreambleExtraction,
@@ -104,17 +163,6 @@ def test_runtime_probe_deletes_ilike_policies(send_email_runtime):
             )
         ],
     )
-    llm.register(
-        PolicyRepairDecision,
-        [
-            PolicyRepairDecision(
-                delete=True,
-                repaired_pgn=None,
-                repaired_description=None,
-                rationale="ILIKE with aggregates is unsupported at runtime.",
-            )
-        ],
-    )
 
     context = DFCBenchmarkContext.prepare_task(
         task_context=BenchmarkTaskContext(
@@ -124,12 +172,16 @@ def test_runtime_probe_deletes_ilike_policies(send_email_runtime):
         ),
         runtime_schema=RuntimeSchema.from_tools(send_email_runtime.functions),
         llm=llm,
-        model="fake-model",
+        dfc_model="fake-model",
         functions=send_email_runtime.functions,
     )
     try:
-        assert context.registered_policy_ids == []
-        assert len(context.diagnostics.deleted_policies) == 1
+        assert context.registered_policy_ids == ["bad_runtime_policy"]
+        violation = context.validate_tool_call(
+            "send_email",
+            {"recipients": ["alice@example.com"], "subject": "hi", "body": "hello"},
+        )
+        assert violation is not None
     finally:
         context.close()
 

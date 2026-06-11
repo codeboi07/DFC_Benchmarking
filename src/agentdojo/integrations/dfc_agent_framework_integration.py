@@ -1,14 +1,19 @@
 from __future__ import annotations
 
+import logging
 from ast import literal_eval
 from collections.abc import Sequence
+from pathlib import Path
 
 from agentdojo.agent_pipeline.base_pipeline_element import BasePipelineElement
 from agentdojo.agent_pipeline.tool_execution import ToolsExecutor
 from agentdojo.functions_runtime import EmptyEnv, Env, FunctionsRuntime
+from agentdojo.logging import Logger, TraceLogger
 from agentdojo.task_suite.load_suites import get_suites
 from agentdojo.types import ChatMessage, ChatUserMessage, get_text_content_as_str, text_content_block_from_string
 from dfc_agent_framework_integration.context import DFCBenchmarkContext
+from dfc_agent_framework_integration.dfc_event_log import DFCEventLog, resolve_dfc_artifact_dir
+from dfc_agent_framework_integration.persistence import export_run_artifacts
 from dfc_agent_framework_integration.runtime import (
     format_prompt_violation_message,
     format_response_violation_message,
@@ -24,6 +29,24 @@ DFC_SYSTEM_NOTICE = (
 )
 
 AGENTDYN_SUITES = ("shopping", "github", "dailylife")
+
+
+def export_dfc_context_to_run_log(dfc_context: DFCBenchmarkContext) -> Path | None:
+    logger = Logger.get()
+    if not isinstance(logger, TraceLogger):
+        return None
+
+    artifact_dir = logger.dfc_artifact_dir()
+    if artifact_dir is None:
+        return None
+
+    try:
+        export_run_artifacts(dfc_context, artifact_dir)
+    except Exception as exc:
+        logging.warning("Failed to export DFC artifacts to %s: %s", artifact_dir, exc)
+        return None
+
+    return artifact_dir
 
 
 def prepare_agentdyn_task_contexts(benchmark_version: str = "v1.2.2") -> list[BenchmarkTaskContext]:
@@ -73,13 +96,16 @@ class AgentDojoDFCBootstrap(BasePipelineElement):
         self,
         suite_name: str | None,
         llm_client: object,
-        model: str,
+        dfc_model: str,
+        *,
+        agent_model: str | None = None,
         benchmark_name: str = "agentdyn",
         benchmark_version: str | None = "v1.2.2",
     ) -> None:
         self.suite_name = suite_name
         self.llm_client = llm_client
-        self.model = model
+        self.dfc_model = dfc_model
+        self.agent_model = agent_model
         self.benchmark_name = benchmark_name
         self.benchmark_version = benchmark_version
 
@@ -102,13 +128,19 @@ class AgentDojoDFCBootstrap(BasePipelineElement):
         elif not isinstance(task_context, BenchmarkTaskContext):
             task_context = BenchmarkTaskContext.model_validate(task_context)
 
-        runtime_schema = RuntimeSchema.from_tools(runtime.functions)
+        runtime_schema = RuntimeSchema.from_tools(
+            runtime.functions,
+            functions_runtime=runtime,
+            env=env,
+        )
         context = DFCBenchmarkContext.prepare_task(
             task_context=task_context,
             runtime_schema=runtime_schema,
             llm=self.llm_client,
-            model=self.model,
+            dfc_model=self.dfc_model,
+            agent_model=self.agent_model,
             functions=runtime.functions,
+            event_log=DFCEventLog(resolve_dfc_artifact_dir()),
         )
         messages = _augment_system(messages, DFC_SYSTEM_NOTICE)
         extra_args = {**extra_args, "dfc_context": context}
@@ -182,6 +214,8 @@ class AgentDojoDFCToolsExecutor(ToolsExecutor):
                 continue
 
             tool_call_result, error = runtime.run_function(env, tool_call.function, args)
+            if error is None:
+                context.record_tool_output(tool_call.function, tool_call_result)
             formatted_tool_call_result = self.output_formatter(tool_call_result)
             tool_call_results.append(
                 ChatToolResultMessage(

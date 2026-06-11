@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 
+from dfc_agent_framework_integration.dfc_event_log import DFCEventLog
 from dfc_agent_framework_integration.llm import StructuredLLMClient
 from dfc_agent_framework_integration.prompts import EXTRACTION_INSTRUCTIONS
 from dfc_agent_framework_integration.schema import PreambleExtraction, PreambleFact
@@ -34,9 +35,7 @@ def validate_extraction_facts(facts: dict[str, str]) -> None:
         raise ExtractionValidationError("At least one fact must be extracted")
     for key, value in facts.items():
         if not _KEY_PATTERN.match(key):
-            raise ExtractionValidationError(
-                f"Key {key!r} must match ^[a-z][a-z0-9_]*$"
-            )
+            raise ExtractionValidationError(f"Key {key!r} must match ^[a-z][a-z0-9_]*$")
         if any(key.startswith(prefix) for prefix in _RESERVED_PREFIXES):
             raise ExtractionValidationError(f"Key {key!r} uses a reserved prefix")
         if len(key) > MAX_KEY_LENGTH:
@@ -53,24 +52,27 @@ def extract_preamble_facts(
     model: str,
     preamble: str,
     allow_repair: bool = True,
+    event_log: DFCEventLog | None = None,
 ) -> dict[str, str]:
+    event_log = event_log or DFCEventLog(None)
     extraction = _call_extraction_llm(llm, model=model, preamble=preamble)
     try:
         facts = facts_to_dict(extraction.facts)
         validate_extraction_facts(facts)
+        event_log.log("extraction_complete", fact_keys=sorted(facts.keys()))
         return facts
     except ExtractionValidationError as first_error:
         if not allow_repair:
             raise ExtractionError(str(first_error)) from first_error
+        event_log.log("extraction_repair_start", error=str(first_error))
         repair_input = (
-            f"{preamble}\n\n"
-            f"Previous extraction failed validation: {first_error}\n"
-            "Return corrected facts only."
+            f"{preamble}\n\nPrevious extraction failed validation: {first_error}\nReturn corrected facts only."
         )
         repaired = _call_extraction_llm(llm, model=model, preamble=repair_input)
         try:
             repaired_facts = facts_to_dict(repaired.facts)
             validate_extraction_facts(repaired_facts)
+            event_log.log("extraction_repair_complete", fact_keys=sorted(repaired_facts.keys()))
             return repaired_facts
         except ExtractionValidationError as second_error:
             raise ExtractionError(str(second_error)) from second_error

@@ -29,7 +29,7 @@ def test_blocked_tool_call_returns_policy_description(send_email_runtime, combin
         ),
         runtime_schema=RuntimeSchema.from_tools(send_email_runtime.functions),
         llm=combined_llm,
-        model="fake-model",
+        dfc_model="fake-model",
         functions=send_email_runtime.functions,
     )
     try:
@@ -38,7 +38,10 @@ def test_blocked_tool_call_returns_policy_description(send_email_runtime, combin
             {"recipients": ["trustme@gmail.com"], "subject": "hi", "body": "hello"},
         )
         assert violation is not None
+        assert violation.policy_ids == ["send_email_recipient"]
         assert any("authorized" in desc.lower() for desc in violation.policy_descriptions)
+        assert context.diagnostics.policy_fire_counts["send_email_recipient"] == 1
+        assert context.diagnostics.validation_events[-1]["policy_ids"] == ["send_email_recipient"]
     finally:
         context.close()
 
@@ -52,7 +55,7 @@ def test_allowed_tool_call_with_list_recipients(send_email_runtime, combined_llm
         ),
         runtime_schema=RuntimeSchema.from_tools(send_email_runtime.functions),
         llm=combined_llm,
-        model="fake-model",
+        dfc_model="fake-model",
         functions=send_email_runtime.functions,
     )
     try:
@@ -74,7 +77,7 @@ def test_multiple_recipients_block_if_any_unauthorized(send_email_runtime, combi
         ),
         runtime_schema=RuntimeSchema.from_tools(send_email_runtime.functions),
         llm=combined_llm,
-        model="fake-model",
+        dfc_model="fake-model",
         functions=send_email_runtime.functions,
     )
     try:
