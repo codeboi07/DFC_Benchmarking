@@ -441,7 +441,15 @@ def get_llm(provider: str, model: str, model_id: str | None, tool_delimiter: str
 
     elif provider == "bedrock":
         # AWS Bedrock-hosted Claude via the async Anthropic Bedrock client.
-        bedrock_client = anthropic.AsyncAnthropicBedrock(aws_region=os.getenv("AWS_REGION", "us-east-1"))
+        # NOTE: this async client owns an httpx connection pool bound to the event loop it is
+        # first used on. Do NOT share one pipeline/client across threads or multiple event loops
+        # (e.g. ThreadPoolExecutor) — it deadlocks. Build one pipeline per worker. The timeout
+        # ensures a wedged streaming call fails fast instead of hanging forever.
+        bedrock_client = anthropic.AsyncAnthropicBedrock(
+            aws_region=os.getenv("AWS_REGION", "us-east-1"),
+            timeout=float(os.getenv("BEDROCK_TIMEOUT", "180")),
+            max_retries=2,
+        )
         llm = AnthropicLLM(bedrock_client, model)
 
     elif provider == "together":
@@ -630,7 +638,11 @@ class AgentPipeline(BasePipelineElement):
                 structured_llm = OpenAIStructuredLLMClient(llm.client, dfc_model_name)
             elif isinstance(llm, AnthropicLLM):
                 # Bedrock-hosted Claude: a sync Bedrock client for structured policy generation.
-                bedrock_client = anthropic.AnthropicBedrock(aws_region=os.getenv("AWS_REGION", "us-east-1"))
+                bedrock_client = anthropic.AnthropicBedrock(
+                    aws_region=os.getenv("AWS_REGION", "us-east-1"),
+                    timeout=float(os.getenv("BEDROCK_TIMEOUT", "180")),
+                    max_retries=2,
+                )
                 structured_llm = BedrockStructuredLLMClient(bedrock_client, dfc_model_name)
             else:
                 raise ValueError(
