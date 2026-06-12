@@ -633,9 +633,13 @@ class AgentPipeline(BasePipelineElement):
 
             agent_model_name = llm_name if isinstance(llm_name, str) else getattr(llm, "model", "unknown")
             dfc_model_name = config.dfc_model or agent_model_name
+            # Cheap, separate model for the neutral read-only-vs-effectful sink classifier (admission
+            # control). Defaults to Haiku on Bedrock; override via DFC_CLASSIFIER_MODEL. None => reuse dfc.
+            classifier_model_name: str | None = None
             if isinstance(llm, OpenAILLM):
                 from dfc_agent_framework_integration.llm import OpenAIStructuredLLMClient
                 structured_llm = OpenAIStructuredLLMClient(llm.client, dfc_model_name)
+                classifier_model_name = os.getenv("DFC_CLASSIFIER_MODEL") or None
             elif isinstance(llm, AnthropicLLM):
                 # Bedrock-hosted Claude: a sync Bedrock client for structured policy generation.
                 bedrock_client = anthropic.AnthropicBedrock(
@@ -644,6 +648,9 @@ class AgentPipeline(BasePipelineElement):
                     max_retries=2,
                 )
                 structured_llm = BedrockStructuredLLMClient(bedrock_client, dfc_model_name)
+                classifier_model_name = os.getenv(
+                    "DFC_CLASSIFIER_MODEL", "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+                )
             else:
                 raise ValueError(
                     "dfc_agent_framework_integration defense requires an OpenAI or Bedrock/Anthropic model"
@@ -658,6 +665,7 @@ class AgentPipeline(BasePipelineElement):
                     structured_llm,
                     dfc_model_name,
                     agent_model=agent_model_name,
+                    classifier_model=classifier_model_name,
                 ),
                 guarded_llm,
                 tools_loop,

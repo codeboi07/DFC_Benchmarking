@@ -31,33 +31,84 @@ DFC_SYSTEM_NOTICE = (
 AGENTDYN_SUITES = ("shopping", "github", "dailylife")
 
 
+def _coerce_list_fields(raw: object, text_format) -> object:
+    """Light, schema-driven repair for the common Claude tool-use malformation where a field typed as a
+    list arrives as a dict (e.g. {"0": {...}}) or a single object. Wraps it back into a list so validation
+    can succeed. Anything it can't confidently fix is left as-is for the retry/validation path to handle."""
+    from typing import get_origin
+
+    if not isinstance(raw, dict):
+        return raw
+    out = dict(raw)
+    for field_name, field_info in text_format.model_fields.items():
+        if get_origin(field_info.annotation) is not list or field_name not in out:
+            continue
+        value = out[field_name]
+        if isinstance(value, list):
+            continue
+        if isinstance(value, dict):
+            inner = list(value.values())
+            out[field_name] = inner if inner and all(isinstance(x, dict) for x in inner) else [value]
+        else:
+            out[field_name] = [value]
+    return out
+
+
 class BedrockStructuredLLMClient:
     """StructuredLLMClient backed by AWS Bedrock-hosted Claude. Implements the framework's
-    `parse(*, model, instructions, input_text, text_format)` protocol via Claude tool-use:
-    the pydantic schema becomes a forced tool, and the tool_use input is validated back into it."""
+    `parse(*, model, instructions, input_text, text_format)` protocol via Claude tool-use: the pydantic
+    schema becomes a forced tool, and the tool_use input is validated back into it. Robust to malformed
+    tool output — it coerces the common list-shape error, and on validation failure feeds the error back
+    to the model for a corrected retry instead of crashing the task."""
 
-    def __init__(self, client: object, model: str) -> None:
+    def __init__(self, client: object, model: str, *, max_attempts: int = 3) -> None:
         self._client = client  # anthropic.AnthropicBedrock (sync)
         self._model = model
+        self._max_attempts = max_attempts
 
     def parse(self, *, model: str | None = None, instructions: str, input_text: str, text_format):
+        from pydantic import ValidationError
+
         schema = text_format.model_json_schema()
-        response = self._client.messages.create(
-            model=model or self._model,
-            max_tokens=4096,
-            system=instructions,
-            messages=[{"role": "user", "content": input_text}],
-            tools=[{
-                "name": "emit_structured_result",
-                "description": "Return the result strictly matching the provided JSON schema.",
-                "input_schema": schema,
-            }],
-            tool_choice={"type": "tool", "name": "emit_structured_result"},
+        tool = {
+            "name": "emit_structured_result",
+            "description": "Return the result strictly matching the provided JSON schema.",
+            "input_schema": schema,
+        }
+        messages: list[dict] = [{"role": "user", "content": input_text}]
+        last_error: str | None = None
+        for _ in range(self._max_attempts):
+            response = self._client.messages.create(
+                model=model or self._model,
+                max_tokens=4096,
+                system=instructions,
+                messages=messages,
+                tools=[tool],
+                tool_choice={"type": "tool", "name": "emit_structured_result"},
+            )
+            block = next((b for b in response.content if getattr(b, "type", None) == "tool_use"), None)
+            if block is None:
+                last_error = "model returned no tool_use block"
+                continue
+            try:
+                return text_format.model_validate(_coerce_list_fields(block.input, text_format))
+            except ValidationError as exc:
+                last_error = str(exc)
+                # Feed the validation error back and ask for a corrected call.
+                messages = messages + [
+                    {"role": "assistant", "content": [
+                        {"type": "tool_use", "id": block.id, "name": "emit_structured_result", "input": block.input}
+                    ]},
+                    {"role": "user", "content": [
+                        {"type": "tool_result", "tool_use_id": block.id, "content": (
+                            f"That output did not match the schema:\n{exc}\n"
+                            "Call emit_structured_result again with corrected, schema-valid arguments."
+                        )}
+                    ]},
+                ]
+        raise ValueError(
+            f"Bedrock structured output for {text_format.__name__} failed after {self._max_attempts} attempts: {last_error}"
         )
-        for block in response.content:
-            if getattr(block, "type", None) == "tool_use":
-                return text_format.model_validate(block.input)
-        raise ValueError(f"Bedrock structured output failed for {text_format.__name__}")
 
 
 def export_dfc_context_to_run_log(dfc_context: DFCBenchmarkContext) -> Path | None:
@@ -128,6 +179,7 @@ class AgentDojoDFCBootstrap(BasePipelineElement):
         dfc_model: str,
         *,
         agent_model: str | None = None,
+        classifier_model: str | None = None,
         benchmark_name: str = "agentdyn",
         benchmark_version: str | None = "v1.2.2",
     ) -> None:
@@ -135,6 +187,7 @@ class AgentDojoDFCBootstrap(BasePipelineElement):
         self.llm_client = llm_client
         self.dfc_model = dfc_model
         self.agent_model = agent_model
+        self.classifier_model = classifier_model
         self.benchmark_name = benchmark_name
         self.benchmark_version = benchmark_version
 
@@ -168,6 +221,7 @@ class AgentDojoDFCBootstrap(BasePipelineElement):
             llm=self.llm_client,
             dfc_model=self.dfc_model,
             agent_model=self.agent_model,
+            classifier_model=self.classifier_model,
             functions=runtime.functions,
             event_log=DFCEventLog(resolve_dfc_artifact_dir()),
         )

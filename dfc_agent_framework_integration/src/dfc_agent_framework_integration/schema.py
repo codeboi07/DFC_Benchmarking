@@ -65,6 +65,29 @@ class GeneratedPolicySet(BaseModel):
     policies: list[GeneratedPolicy]
 
 
+class SinkEffect(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    relation: str = Field(description="The sink relation name being classified, e.g. SendEmailInput.")
+    kind: Literal["read_only", "effectful"] = Field(
+        description=(
+            "effectful = calling the tool sends, transfers, changes, shares, posts, deletes, or otherwise "
+            "causes an externally-visible or irreversible effect. read_only = the tool only reads, searches, "
+            "queries, lists, views, or navigates to retrieve data, with no external or persistent effect."
+        ),
+    )
+    reason: str = Field(description="Brief justification grounded in the tool's described behavior.")
+
+
+class SinkEffectClassification(BaseModel):
+    """Neutral classification of each sink tool as read-only vs effectful, used as deterministic
+    admission control: policies on read_only sinks give no security benefit and are dropped."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    sinks: list[SinkEffect]
+
+
 class PolicyRepairDecision(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

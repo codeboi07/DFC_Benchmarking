@@ -64,6 +64,7 @@ class DFCBenchmarkContext:
         dfc_model: str,
         functions: dict[str, Any],
         agent_model: str | None = None,
+        classifier_model: str | None = None,
         event_log: DFCEventLog | None = None,
     ) -> DFCBenchmarkContext:
         event_log = event_log or DFCEventLog(None)
@@ -105,6 +106,7 @@ class DFCBenchmarkContext:
             preamble_facts=extracted_facts,
             runtime_schema=runtime_schema,
             event_log=event_log,
+            classifier_model=classifier_model,
         )
         dfc_conn.refresh_catalog()
         event_log.log(
