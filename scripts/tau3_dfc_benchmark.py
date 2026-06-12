@@ -29,6 +29,7 @@ DEFAULT_DOMAINS = ("retail", "airline", "telecom")
 DEFAULT_MODEL = "bedrock/us.anthropic.claude-sonnet-4-5-20250929-v1:0"
 DEFAULT_USER_MODEL = DEFAULT_MODEL
 DEFAULT_RETRIEVAL_CONFIG = "bm25"
+DFC_UV_PACKAGES = ("duckdb", "data-flow-control", "boto3")
 
 
 @dataclass(frozen=True)
@@ -173,7 +174,11 @@ def generate_policy_map(repo_dir: Path, domains: list[str], output_path: Path) -
         print(json.dumps(out, indent=2, sort_keys=True))
         ''',
     )
-    text = capture(["uv", "run", "python", str(helper), ",".join(domains)], cwd=repo_dir)
+    cmd = ["uv", "run"]
+    for package in DFC_UV_PACKAGES:
+        cmd += ["--with", package]
+    cmd += ["python", str(helper), ",".join(domains)]
+    text = capture(cmd, cwd=repo_dir)
     data = json.loads(text)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(json.dumps(data, indent=2, sort_keys=True), encoding="utf-8")
@@ -451,8 +456,11 @@ def run_tau(
     retrieval_config: str,
     extra_args: list[str],
 ) -> None:
-    cmd = [
-        "uv", "run", "tau2", "run",
+    cmd = ["uv", "run"]
+    for package in DFC_UV_PACKAGES:
+        cmd += ["--with", package]
+    cmd += [
+        "tau2", "run",
         "--domain", domain,
         "--agent", agent,
         "--agent-llm", agent_model,
