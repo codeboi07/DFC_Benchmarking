@@ -19,6 +19,11 @@ class ModelsEnum(StrEnum):
     """GPT-3.5 Turbo 0125"""
     GPT_4_TURBO_2024_04_09 = "gpt-4-turbo-2024-04-09"
     """GPT-4 Turbo"""
+    # AWS Bedrock-hosted Claude (inference-profile IDs). Provider "bedrock".
+    BEDROCK_CLAUDE_SONNET_4_5 = "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
+    """Claude Sonnet 4.5 (Bedrock)"""
+    BEDROCK_CLAUDE_HAIKU_4_5 = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+    """Claude Haiku 4.5 (Bedrock)"""
 
 
 MODEL_PROVIDERS = {
@@ -30,10 +35,14 @@ MODEL_PROVIDERS = {
     ModelsEnum.GPT_3_5_TURBO_0125: "openai",
     ModelsEnum.GPT_4_0125_PREVIEW: "openai",
     ModelsEnum.GPT_4_TURBO_2024_04_09: "openai",
+    ModelsEnum.BEDROCK_CLAUDE_SONNET_4_5: "bedrock",
+    ModelsEnum.BEDROCK_CLAUDE_HAIKU_4_5: "bedrock",
 }
 
 
 MODEL_NAMES = {
+    "us.anthropic.claude-sonnet-4-5-20250929-v1:0": "Claude",
+    "us.anthropic.claude-haiku-4-5-20251001-v1:0": "Claude",
     "gpt-5.1-2025-11-13": "GPT-5",
     "gpt-4o-2024-08-06": "GPT-4",
     "gpt-4o-2024-05-13": "GPT-4",

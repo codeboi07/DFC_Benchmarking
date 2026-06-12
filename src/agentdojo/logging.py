@@ -206,7 +206,7 @@ class TraceLogger(Logger):
         if attack_type is None or pipeline_name is None:
             return None
 
-        pipeline_name = str(pipeline_name).replace("/", "_")
+        pipeline_name = str(pipeline_name).replace("/", "_").replace(":", "_").replace("\\", "_")
         directory = Path(self.dirpath) / pipeline_name / suite_name / user_task_id / attack_type
         stem = injection_task_id or "none"
         return directory / f"{stem}.json"
@@ -254,7 +254,7 @@ class TraceLogger(Logger):
                 f"Cannot log executed benchmark (suite_name={suite_name}, user_task_id={user_task_id}, injection_task_id={injection_task_id}, attack_type={attack_type}) because pipeline_name is not known. Make sure to run the benchmark with the pipeline_name parameter set (cf. benchmark_suite_with_injections(...))."
             )
             return
-        pipeline_name = pipeline_name.replace("/", "_")
+        pipeline_name = pipeline_name.replace("/", "_").replace(":", "_").replace("\\", "_")
 
         directory = f"{self.dirpath}/{pipeline_name}/{suite_name}/{user_task_id}/{attack_type}"
         if not os.path.exists(directory):

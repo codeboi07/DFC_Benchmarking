@@ -8,3 +8,7 @@ devnotes/
 .venv/.venv/
 __pycache__/
 *.pyc
+
+runs/
+.venv/
+papers/

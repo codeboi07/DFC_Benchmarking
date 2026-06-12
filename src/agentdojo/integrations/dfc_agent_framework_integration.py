@@ -31,6 +31,35 @@ DFC_SYSTEM_NOTICE = (
 AGENTDYN_SUITES = ("shopping", "github", "dailylife")
 
 
+class BedrockStructuredLLMClient:
+    """StructuredLLMClient backed by AWS Bedrock-hosted Claude. Implements the framework's
+    `parse(*, model, instructions, input_text, text_format)` protocol via Claude tool-use:
+    the pydantic schema becomes a forced tool, and the tool_use input is validated back into it."""
+
+    def __init__(self, client: object, model: str) -> None:
+        self._client = client  # anthropic.AnthropicBedrock (sync)
+        self._model = model
+
+    def parse(self, *, model: str | None = None, instructions: str, input_text: str, text_format):
+        schema = text_format.model_json_schema()
+        response = self._client.messages.create(
+            model=model or self._model,
+            max_tokens=4096,
+            system=instructions,
+            messages=[{"role": "user", "content": input_text}],
+            tools=[{
+                "name": "emit_structured_result",
+                "description": "Return the result strictly matching the provided JSON schema.",
+                "input_schema": schema,
+            }],
+            tool_choice={"type": "tool", "name": "emit_structured_result"},
+        )
+        for block in response.content:
+            if getattr(block, "type", None) == "tool_use":
+                return text_format.model_validate(block.input)
+        raise ValueError(f"Bedrock structured output failed for {text_format.__name__}")
+
+
 def export_dfc_context_to_run_log(dfc_context: DFCBenchmarkContext) -> Path | None:
     logger = Logger.get()
     if not isinstance(logger, TraceLogger):

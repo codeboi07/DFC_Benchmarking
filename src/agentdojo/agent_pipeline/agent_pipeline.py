@@ -439,6 +439,11 @@ def get_llm(provider: str, model: str, model_id: str | None, tool_delimiter: str
         else:
             llm = AnthropicLLM(client, model)
 
+    elif provider == "bedrock":
+        # AWS Bedrock-hosted Claude via the async Anthropic Bedrock client.
+        bedrock_client = anthropic.AsyncAnthropicBedrock(aws_region=os.getenv("AWS_REGION", "us-east-1"))
+        llm = AnthropicLLM(bedrock_client, model)
+
     elif provider == "together":
         client = openai.OpenAI(
             api_key=os.getenv("TOGETHER_API_KEY"),
@@ -609,19 +614,28 @@ class AgentPipeline(BasePipelineElement):
             pipeline.name = f"{llm_name}-{config.defense}"
             return pipeline
         if config.defense == "dfc_agent_framework_integration":
+            from agentdojo.agent_pipeline.llms.anthropic_llm import AnthropicLLM
             from agentdojo.integrations.dfc_agent_framework_integration import (
                 AgentDojoDFCBootstrap,
                 AgentDojoDFCPromptGuard,
                 AgentDojoDFCResponseValidator,
                 AgentDojoDFCToolsExecutor,
+                BedrockStructuredLLMClient,
             )
-            from dfc_agent_framework_integration.llm import OpenAIStructuredLLMClient
 
-            if not isinstance(llm, OpenAILLM):
-                raise ValueError("dfc_agent_framework_integration defense requires an OpenAI model with structured outputs")
-            agent_model_name = llm_name if isinstance(llm_name, str) else llm.model
+            agent_model_name = llm_name if isinstance(llm_name, str) else getattr(llm, "model", "unknown")
             dfc_model_name = config.dfc_model or agent_model_name
-            structured_llm = OpenAIStructuredLLMClient(llm.client, dfc_model_name)
+            if isinstance(llm, OpenAILLM):
+                from dfc_agent_framework_integration.llm import OpenAIStructuredLLMClient
+                structured_llm = OpenAIStructuredLLMClient(llm.client, dfc_model_name)
+            elif isinstance(llm, AnthropicLLM):
+                # Bedrock-hosted Claude: a sync Bedrock client for structured policy generation.
+                bedrock_client = anthropic.AnthropicBedrock(aws_region=os.getenv("AWS_REGION", "us-east-1"))
+                structured_llm = BedrockStructuredLLMClient(bedrock_client, dfc_model_name)
+            else:
+                raise ValueError(
+                    "dfc_agent_framework_integration defense requires an OpenAI or Bedrock/Anthropic model"
+                )
             guarded_llm = AgentDojoDFCPromptGuard(llm)
             tools_loop = ToolsExecutionLoop([AgentDojoDFCToolsExecutor(tool_output_formatter), guarded_llm])
             pipeline = cls([

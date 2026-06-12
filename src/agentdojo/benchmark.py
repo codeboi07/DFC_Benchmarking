@@ -415,7 +415,8 @@ def load_task_results(
     injection_task: str,
     logdir: Path,
 ) -> TaskResults:
-    path = logdir / pipeline_name / suite_name / user_task / attack_name / f"{injection_task}.json"
+    safe_pipeline_name = pipeline_name.replace("/", "_").replace(":", "_").replace("\\", "_")
+    path = logdir / safe_pipeline_name / suite_name / user_task / attack_name / f"{injection_task}.json"
     with path.open(encoding="utf-8") as f:
         res_dict = json.load(f)
 
