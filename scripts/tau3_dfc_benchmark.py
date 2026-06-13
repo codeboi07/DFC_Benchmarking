@@ -25,7 +25,7 @@ from typing import Any
 
 
 DEFAULT_REPO_URL = "https://github.com/sierra-research/tau2-bench.git"
-DEFAULT_DOMAINS = ("retail", "airline", "telecom")
+DEFAULT_DOMAINS = ("retail", "airline", "telecom", "banking_knowledge")
 DEFAULT_MODEL = "bedrock/us.anthropic.claude-sonnet-4-5-20250929-v1:0"
 DEFAULT_USER_MODEL = DEFAULT_MODEL
 DEFAULT_RETRIEVAL_CONFIG = "bm25"
@@ -592,9 +592,23 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--domains", nargs="+", default=list(DEFAULT_DOMAINS))
     parser.add_argument("--agent-model", default=DEFAULT_MODEL)
     parser.add_argument("--user-model", default=DEFAULT_USER_MODEL)
-    parser.add_argument("--num-trials", type=int, default=1)
-    parser.add_argument("--num-tasks", type=int, default=3, help="Use none/all by passing --all-tasks.")
-    parser.add_argument("--all-tasks", action="store_true")
+    parser.add_argument(
+        "--num-trials",
+        type=int,
+        default=1,
+        help="Trials per task. Defaults to 1 for the requested full-benchmark run.",
+    )
+    parser.add_argument(
+        "--num-tasks",
+        type=int,
+        default=None,
+        help="Optional smoke-test task limit. Omit to run every task.",
+    )
+    parser.add_argument(
+        "--all-tasks",
+        action="store_true",
+        help="Explicitly run every task. This is already the default.",
+    )
     parser.add_argument("--task-ids", nargs="*", default=None)
     parser.add_argument("--max-concurrency", type=int, default=1)
     parser.add_argument("--seed", type=int, default=300)
@@ -608,12 +622,21 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--run-baseline", action="store_true")
     parser.add_argument("--run-dfc", action="store_true")
     parser.add_argument("--analyze", action="store_true")
+    parser.add_argument(
+        "--full-run",
+        action="store_true",
+        help="Run baseline and DFC across selected domains, then analyze utility.",
+    )
     parser.add_argument("--tau-extra-arg", action="append", default=[], help="Extra raw arg passed to tau2 run; repeat for each token.")
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
+    if args.full_run:
+        args.run_baseline = True
+        args.run_dfc = True
+        args.analyze = True
     repo_dir = args.repo_dir.resolve()
     policy_map = args.policy_map.resolve()
     names = RunNames(args.baseline_prefix, args.dfc_prefix)

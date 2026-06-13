@@ -20,16 +20,17 @@ one of the audio-native realtime providers used for full-duplex voice.
 7. Writes side-by-side utility analysis:
    `generated/tau3/analysis/summary.csv` and `by_task.csv`.
 
-Default benchmark domains now match the Sierra `τ-Voice` paper's task domains:
+Default benchmark domains include the three Sierra `τ-Voice` domains plus the
+separate Sierra `τ-Knowledge` banking domain:
 
 - `retail`
 - `airline`
 - `telecom`
+- `banking_knowledge`
 
-The paper reports 278 tasks total: retail 114, airline 50, telecom 114. The separate
-`τ-Knowledge` paper introduces `banking_knowledge`; run it explicitly with
-`--domains banking_knowledge` when you want that benchmark too. The `mock` domain is
-mostly for tau2 unit testing.
+The `τ-Voice` subset contains 278 tasks: retail 114, airline 50, telecom 114.
+`banking_knowledge` adds the `τ-Knowledge` tasks and uses the configured retrieval
+backend. The `mock` domain remains excluded because it is primarily for tau2 testing.
 
 ## AWS Bedrock Setup
 
@@ -94,12 +95,33 @@ python scripts\tau3_dfc_benchmark.py `
   --analyze
 ```
 
-## Full Baseline
+## Full Tau3 Run: One Trial, Every Task
+
+This runs every task in each condition across `retail`, `airline`, `telecom`,
+and `banking_knowledge`: first baseline, then DFC, followed by side-by-side utility
+analysis. One trial and all tasks are script defaults. Banking uses `bm25` retrieval
+unless `--retrieval-config` overrides it.
 
 ```powershell
 python scripts\tau3_dfc_benchmark.py `
-  --num-trials 4 `
-  --all-tasks `
+  --max-concurrency 3 `
+  --full-run
+```
+
+In Colab:
+
+```python
+!python scripts/tau3_dfc_benchmark.py \
+  --max-concurrency 3 \
+  --full-run
+```
+
+Use `--max-concurrency 1` if Bedrock throttles requests.
+
+## Full Baseline Only
+
+```powershell
+python scripts\tau3_dfc_benchmark.py `
   --max-concurrency 3 `
   --run-baseline
 ```
@@ -110,7 +132,7 @@ Baseline results land under:
 external/tau2-bench/data/simulations/baseline_bedrock_sonnet_<domain>/results.json
 ```
 
-## Full DFC Run
+## Full DFC Run Only
 
 Review this first:
 
@@ -122,8 +144,6 @@ Then:
 
 ```powershell
 python scripts\tau3_dfc_benchmark.py `
-  --num-trials 4 `
-  --all-tasks `
   --max-concurrency 3 `
   --skip-setup `
   --skip-generate `
@@ -165,12 +185,9 @@ Key columns:
 Positive delta means utility improved under DFC. Negative delta means the sink map or trusted-value
 materializer is probably over-blocking and needs domain-specific tightening.
 
-## Optional Tau-Knowledge Run
+## Banking-Only Run
 
-The Sierra `τ-Knowledge` page is a separate March 18, 2026 release. It adds the
-`banking_knowledge` domain, with retrieval over a banking knowledge base. Run it
-separately so its retrieval setup and utility numbers do not get blended with the
-three `τ-Voice` domains:
+To run only the Sierra `τ-Knowledge` banking domain:
 
 ```powershell
 python scripts\tau3_dfc_benchmark.py `
