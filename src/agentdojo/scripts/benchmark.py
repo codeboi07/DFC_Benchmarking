@@ -32,6 +32,7 @@ def benchmark_suite(
     model_id: str | None = None,
     attack: str | None = None,
     defense: str | None = None,
+    dfc_model: str | None = None,
     tool_delimiter: str = "tool",
     system_message_name: str | None = None,
     system_message: str | None = None,
@@ -55,6 +56,7 @@ def benchmark_suite(
             llm=model,
             model_id=model_id,
             defense=defense,
+            dfc_model=dfc_model,
             tool_delimiter=tool_delimiter,
             system_message_name=system_message_name,
             system_message=system_message,
@@ -150,6 +152,13 @@ def show_results(suite_name: str, results: SuiteResults, show_security_results: 
     help="The defense to use. `None` by default.",
 )
 @click.option(
+    "--dfc-model",
+    "dfc_model",
+    type=str,
+    default=None,
+    help="Model for DFC policy extraction/generation (dfc_agent_framework_integration). Defaults to the agent model; required (e.g. an Opus inference-profile ARN) when the agent is a non-Anthropic bedrock_converse model.",
+)
+@click.option(
     "--system-message-name",
     type=str,
     default=None,
@@ -219,6 +228,7 @@ def main(
     model_id: str | None = None,
     attack: str | None = None,
     defense: str | None = None,
+    dfc_model: str | None = None,
     tool_delimiter: str = "tool",
     system_message_name: str | None = None,
     system_message: str | None = None,
@@ -252,6 +262,7 @@ def main(
                 model_id=model_id,
                 attack=attack,
                 defense=defense,
+                dfc_model=dfc_model,
                 tool_delimiter=tool_delimiter,
                 system_message_name=system_message_name,
                 system_message=system_message,

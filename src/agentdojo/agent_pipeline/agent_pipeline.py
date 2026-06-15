@@ -451,6 +451,14 @@ def get_llm(provider: str, model: str, model_id: str | None, tool_delimiter: str
             max_retries=2,
         )
         llm = AnthropicLLM(bedrock_client, model)
+    elif provider == "bedrock_converse":
+        # Non-Anthropic Bedrock models (Llama, GPT-OSS, ...) via the Bedrock Converse API.
+        from agentdojo.agent_pipeline.llms.bedrock_converse_llm import BedrockConverseLLM
+        from agentdojo.models import BEDROCK_CONVERSE_ARNS
+
+        region = os.getenv("AWS_REGION") or os.getenv("AWS_DEFAULT_REGION") or "us-east-1"
+        resolved = BEDROCK_CONVERSE_ARNS.get(model, model)  # clean name -> inference-profile ARN
+        llm = BedrockConverseLLM(resolved, region=region)
 
     elif provider == "together":
         client = openai.OpenAI(
@@ -623,6 +631,7 @@ class AgentPipeline(BasePipelineElement):
             return pipeline
         if config.defense == "dfc_agent_framework_integration":
             from agentdojo.agent_pipeline.llms.anthropic_llm import AnthropicLLM
+            from agentdojo.agent_pipeline.llms.bedrock_converse_llm import BedrockConverseLLM
             from agentdojo.integrations.dfc_agent_framework_integration import (
                 AgentDojoDFCBootstrap,
                 AgentDojoDFCPromptGuard,
@@ -640,8 +649,17 @@ class AgentPipeline(BasePipelineElement):
                 from dfc_agent_framework_integration.llm import OpenAIStructuredLLMClient
                 structured_llm = OpenAIStructuredLLMClient(llm.client, dfc_model_name)
                 classifier_model_name = os.getenv("DFC_CLASSIFIER_MODEL") or None
-            elif isinstance(llm, AnthropicLLM):
-                # Bedrock-hosted Claude: a sync Bedrock client for structured policy generation.
+            elif isinstance(llm, (AnthropicLLM, BedrockConverseLLM)):
+                # Structured policy generation via the Anthropic SDK on Bedrock (Claude). The agent may
+                # be Claude (AnthropicLLM) OR a non-Anthropic Converse model (e.g. GPT-OSS); in the latter
+                # case the agent model cannot generate policies, so an explicit Anthropic/Bedrock
+                # --dfc-model (e.g. an Opus inference-profile ARN) is required.
+                if isinstance(llm, BedrockConverseLLM) and not config.dfc_model:
+                    raise ValueError(
+                        "dfc_agent_framework_integration with a bedrock_converse agent (e.g. GPT-OSS) "
+                        "requires --dfc-model set to a Claude/Bedrock policy model (e.g. an Opus "
+                        "inference-profile ARN)."
+                    )
                 bedrock_client = anthropic.AnthropicBedrock(
                     aws_region=os.getenv("AWS_REGION", "us-east-1"),
                     timeout=float(os.getenv("BEDROCK_TIMEOUT", "180")),

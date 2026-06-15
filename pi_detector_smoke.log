@@ -1,0 +1,4 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+building transformers_pi_detector pipeline (downloads deberta model)...
+Loading weights:   0%|          | 0/202 [00:00<?, ?it/s]Loading weights: 100%|██████████| 202/202 [00:00<00:00, 7217.94it/s]
+PI_DETECTOR BUILDS OK -> gpt-oss-120b-transformers_pi_detector

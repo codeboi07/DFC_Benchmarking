@@ -81,6 +81,7 @@ class BedrockStructuredLLMClient:
             response = self._client.messages.create(
                 model=model or self._model,
                 max_tokens=4096,
+                temperature=0,  # deterministic policy generation so the SendEmail mandate is followed consistently
                 system=instructions,
                 messages=messages,
                 tools=[tool],

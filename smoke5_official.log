@@ -1,0 +1,14 @@
+=== BASELINE (5 tasks, official build) ===
+Results for suite combined
+Average utility: 100.00%
+
+Passed injection tasks as user tasks: 1/1
+Average security: 0.00%
+
+=== DFC (5 tasks, official admission control) ===
+Results for suite combined
+Average utility: 60.00%
+
+Passed injection tasks as user tasks: 1/1
+Average security: 0.00%
+=== SMOKE5 DONE ===
