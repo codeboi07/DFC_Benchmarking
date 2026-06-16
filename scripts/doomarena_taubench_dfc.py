@@ -359,6 +359,8 @@ class ToolMetrics:
     allowed_effectful_calls: int = 0
     blocked_effectful_calls: int = 0
     executed_tool_calls: int = 0
+    proposed_responses: int = 0
+    blocked_responses: int = 0
     attack_target_proposed_calls: int = 0
     attack_target_executed_calls: int = 0
     proposed_by_tool: Counter[str] = field(default_factory=Counter)
@@ -375,6 +377,8 @@ class ToolMetrics:
             "allowed_effectful_calls": self.allowed_effectful_calls,
             "blocked_effectful_calls": self.blocked_effectful_calls,
             "executed_tool_calls": self.executed_tool_calls,
+            "proposed_responses": self.proposed_responses,
+            "blocked_responses": self.blocked_responses,
             "effectful_block_rate": self.blocked_effectful_calls / proposed if proposed else 0.0,
             "policy_adherence_rate": self.allowed_effectful_calls / proposed if proposed else None,
             "attack_target_proposed_calls": attack_proposed,
@@ -555,11 +559,13 @@ class MetricsGateway:
 
         tool = action.name
         if tool == RESPOND_ACTION_NAME:
+            self.metrics.proposed_responses += 1
             if self.policy_session is not None:
                 allowed, reason = self.policy_session.validate_assistant_response(
                     str(action.kwargs.get("content", ""))
                 )
                 if not allowed:
+                    self.metrics.blocked_responses += 1
                     self.block_events.append({"tool": tool, "arguments": action.kwargs, "reason": reason})
                     return EnvResponse(
                         observation=(
@@ -813,6 +819,8 @@ def flatten_result(result: dict[str, Any]) -> dict[str, Any]:
         "proposed_effectful_calls": proposed_effectful,
         "allowed_effectful_calls": allowed_effectful,
         "blocked_effectful_calls": metrics.get("blocked_effectful_calls", 0),
+        "proposed_responses": metrics.get("proposed_responses", 0),
+        "blocked_responses": metrics.get("blocked_responses", 0),
         "effectful_block_rate": metrics.get("effectful_block_rate", 0),
         "policy_adherence_rate": policy_adherence,
         "attack_target_proposed_calls": metrics.get("attack_target_proposed_calls", 0),
@@ -881,6 +889,8 @@ def compare(output_dir: Path) -> dict[str, Any]:
                 "dfc_proposed_effectful_calls": d["proposed_effectful_calls"],
                 "dfc_allowed_effectful_calls": d["allowed_effectful_calls"],
                 "dfc_policy_adherence_rate": d["policy_adherence_rate"],
+                "baseline_blocked_responses": b["blocked_responses"],
+                "dfc_blocked_responses": d["blocked_responses"],
                 "baseline_steps": b["steps"],
                 "dfc_steps": d["steps"],
             }
@@ -900,6 +910,7 @@ def compare(output_dir: Path) -> dict[str, Any]:
             "attack_target_execution_rate": mean(dfc_rows, "attack_target_execution_rate"),
             "mean_steps": mean(dfc_rows, "steps"),
             "blocked_effectful_calls": sum(r["blocked_effectful_calls"] for r in dfc_rows),
+            "blocked_responses": sum(r["blocked_responses"] for r in dfc_rows),
             "policy_adherence_rate": mean_defined(dfc_rows, "policy_adherence_rate"),
             "policy_adherence_eligible_runs": sum(
                 r["policy_adherence_rate"] is not None for r in dfc_rows
