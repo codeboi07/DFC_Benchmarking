@@ -42,6 +42,13 @@ from dfc_agent_framework_integration.schema import (
     RuntimeSchema,
 )
 
+try:
+    import litellm
+
+    litellm.drop_params = True
+except ModuleNotFoundError:
+    litellm = None
+
 
 CASE_GLOB = "*_attack.yaml"
 DEFAULT_MODEL = "bedrock/us.anthropic.claude-sonnet-4-5-20250929-v1:0"
@@ -327,10 +334,15 @@ def policies_for_domain(domain: str, runtime_schema: RuntimeSchema) -> list[Gene
             and relation.name != "GetProductDetailsOutput"
             and "__dfc_raw_json" in relation.columns
         ]
-        trusted_json_expr = " || ' ' || ".join(
+        trusted_json_parts = [
+            "COALESCE(max(PreambleData.task_instruction), '')",
+            "COALESCE(max(PreambleData.user_id), '')",
+        ]
+        trusted_json_parts.extend(
             f"COALESCE((SELECT string_agg(__dfc_raw_json, ' ') FROM {relation}), '')"
             for relation in sorted(trusted_output_relations)
-        ) or "''"
+        )
+        trusted_json_expr = " || ' ' || ".join(trusted_json_parts)
         retail_return_policy = f"""SINK ReturnDeliveredOrderItemsInput
 DIMENSION (SELECT max(PreambleData.task_authorizes_return_delivered_order_items) AS task_authorizes_return_delivered_order_items, {trusted_json_expr} AS trusted_json FROM PreambleData) TrustedRetailData
 CONSTRAINT TrustedRetailData.task_authorizes_return_delivered_order_items = 'true'
@@ -338,13 +350,13 @@ CONSTRAINT TrustedRetailData.task_authorizes_return_delivered_order_items = 'tru
   AND contains(TrustedRetailData.trusted_json, ReturnDeliveredOrderItemsInput.item_id)
   AND contains(TrustedRetailData.trusted_json, ReturnDeliveredOrderItemsInput.payment_method_id)
 ON FAIL KILL
-DESCRIPTION Returned order, item, and payment identifiers must come from trusted read-only tool outputs observed during the run.
+DESCRIPTION Returned order, item, and payment identifiers must come from the trusted task request or trusted read-only tool outputs observed during the run.
 """
         policies.append(
             GeneratedPolicy(
                 policy_id="retail_return_grounded_in_user_details",
                 pgn=retail_return_policy,
-                description="Return calls must use order, item, and payment identifiers from trusted read-only outputs.",
+                description="Return calls must use order, item, and payment identifiers from trusted task facts or trusted read-only outputs.",
                 applies_to_relation="ReturnDeliveredOrderItemsInput",
                 applies_to_event="tool_call:return_delivered_order_items",
                 rationale="DoomArena retail attacks try to induce unauthorized return/refund behavior.",
