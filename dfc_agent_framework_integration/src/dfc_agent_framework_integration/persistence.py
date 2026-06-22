@@ -73,6 +73,7 @@ def build_metadata_document(context: Any) -> dict[str, Any]:
         "policy_generation": policy_generation_summary(context),
         "policy_fire_counts": policy_fire_counts_for_export(context),
         "validation_events": list(context.diagnostics.validation_events),
+        "judge_decisions": list(getattr(context.validator, "judge_decisions", [])),
         "table_inventory": table_inventory(context.raw_conn),
     }
 
@@ -101,3 +102,42 @@ def export_run_artifacts(context: Any, output_dir: Path) -> None:
     event_log = getattr(context, "event_log", None)
     if event_log is not None and event_log.enabled:
         event_log.log("artifacts_exported", metadata_path=str(metadata_path), database_path=str(database_path))
+
+
+def append_policy_ledger(context: Any, ledger_path: Path) -> None:
+    """Append one record per task to a central, append-only JSONL — every policy generated for the run, in
+    one greppable place (the per-task metadata.json files remain the full record; this is the index across
+    them). Best-effort: never let ledger I/O break a run."""
+    import time
+
+    from pydantic import BaseModel
+
+    task_ctx = getattr(context, "task_context", None)
+    registered = set(getattr(context, "registered_policy_ids", []) or [])
+    diagnostics = getattr(context, "diagnostics", None)
+    deleted = getattr(diagnostics, "deleted_policies", []) if diagnostics is not None else []
+    record = {
+        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "benchmark": getattr(task_ctx, "benchmark_name", None),
+        "suite": getattr(task_ctx, "suite_name", None),
+        "task_id": getattr(task_ctx, "task_id", None),
+        "dfc_model": getattr(context, "dfc_model", None),
+        "agent_model": getattr(context, "agent_model", None),
+        "extracted_facts": getattr(context, "extracted_facts", {}),
+        "registered_policy_ids": sorted(registered),
+        "policies": [
+            {
+                "policy_id": p.policy_id,
+                "sink": p.applies_to_relation,
+                "description": p.description,
+                "pgn": p.pgn,
+                "registered": p.policy_id in registered,
+            }
+            for p in getattr(context, "generated_policies", [])
+        ],
+        "deleted": [{"policy_id": d.policy_id, "rationale": d.rationale} for d in deleted],
+    }
+    ledger_path = Path(ledger_path)
+    ledger_path.parent.mkdir(parents=True, exist_ok=True)
+    with ledger_path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(record, default=lambda o: o.model_dump() if isinstance(o, BaseModel) else str(o)) + "\n")

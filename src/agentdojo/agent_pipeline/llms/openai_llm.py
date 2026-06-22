@@ -122,10 +122,25 @@ def _message_to_openai(message: ChatMessage, model_name: str) -> ChatCompletionM
             raise ValueError(f"Invalid message type: {message}")
 
 
+def _sanitize_tool_args(args: object) -> dict:
+    """Normalize tool-call arguments into a clean JSON object.
+
+    Some reasoning models (e.g. GPT-OSS in the harmony format) emit no-arg tool calls as ``{"": {}}`` — a dict
+    with an empty-string key — instead of ``{}``. That round-trips into the request and Bedrock Converse rejects
+    it ("the format of the value at ...toolUse.input is invalid; provide a json object"). Unwrap the empty-key
+    payload (or drop it) so the args are always a well-formed object. No-op for well-formed models.
+    """
+    if isinstance(args, dict) and "" in args:
+        inner = args.pop("")
+        if isinstance(inner, dict):
+            args = {**inner, **args}
+    return args if isinstance(args, dict) else {}
+
+
 def _openai_to_tool_call(tool_call: ChatCompletionMessageToolCall) -> FunctionCall:
     return FunctionCall(
         function=tool_call.function.name,
-        args=json.loads(tool_call.function.arguments),
+        args=_sanitize_tool_args(json.loads(tool_call.function.arguments)),
         id=tool_call.id,
     )
 
@@ -244,8 +259,12 @@ class OpenAILLMToolFilter(BasePipelineElement):
         messages: Sequence[ChatMessage] = [],
         extra_args: dict = {},
     ) -> tuple[str, FunctionsRuntime, Env, Sequence[ChatMessage], dict]:
-        messages = [*messages, ChatUserMessage(role="user", content=[text_content_block_from_string(self.prompt)])]
-        openai_messages = [_message_to_openai(message, self.model) for message in messages]
+        # Build the filter request in a LOCAL list so the filter's prompt + reply never enter the AGENT's own
+        # conversation. Leaving that pollution in (a stray "filter the tools" user instruction + a fake assistant
+        # turn) derails non-OpenAI agents routed through the Bedrock Converse shim. Only the runtime tool set is
+        # filtered — the defense's actual mechanism — so the agent still sees the clean task + the restricted tools.
+        filter_messages = [*messages, ChatUserMessage(role="user", content=[text_content_block_from_string(self.prompt)])]
+        openai_messages = [_message_to_openai(message, self.model) for message in filter_messages]
         openai_tools = [_function_to_openai(tool) for tool in runtime.functions.values()]
         completion = self.client.chat.completions.create(
             model=self.model,
@@ -268,5 +287,4 @@ class OpenAILLMToolFilter(BasePipelineElement):
 
         runtime.update_functions(new_tools)
 
-        messages = [*messages, output]
         return query, runtime, env, messages, extra_args

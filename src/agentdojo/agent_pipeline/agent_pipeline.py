@@ -448,9 +448,55 @@ def get_llm(provider: str, model: str, model_id: str | None, tool_delimiter: str
         bedrock_client = anthropic.AsyncAnthropicBedrock(
             aws_region=os.getenv("AWS_REGION", "us-east-1"),
             timeout=float(os.getenv("BEDROCK_TIMEOUT", "180")),
-            max_retries=2,
+            max_retries=int(os.getenv("BEDROCK_MAX_RETRIES", "6")),
         )
         llm = AnthropicLLM(bedrock_client, model)
+
+    elif provider == "litellm":
+        # LiteLLM-routed models (e.g. Qwen3-235B via a Bedrock Converse application inference profile in
+        # us-west-2, kept separate from the us-east-1 Claude judges). OpenAILLM drives them unchanged via
+        # the LiteLLMClient shim; per-model routing (the profile ARN + region) is resolved here.
+        from agentdojo.agent_pipeline.llms.litellm_client import LiteLLMClient
+
+        litellm_models = {
+            "qwen3-235b": {
+                "model": os.getenv(
+                    "DFC_QWEN_LITELLM_MODEL",
+                    "bedrock/converse/arn:aws:bedrock:us-west-2:920736616554:application-inference-profile/5wyxoc5dfwag",
+                ),
+                "aws_region_name": os.getenv("DFC_QWEN_REGION", "us-west-2"),
+            },
+            "deepseek-v3.2": {
+                "model": os.getenv(
+                    "DFC_DEEPSEEK_LITELLM_MODEL",
+                    "bedrock/converse/arn:aws:bedrock:us-west-2:920736616554:application-inference-profile/z16zcwi5ay7x",
+                ),
+                "aws_region_name": os.getenv("DFC_DEEPSEEK_REGION", "us-west-2"),
+            },
+            "gpt-oss-120b": {
+                "model": os.getenv(
+                    "DFC_GPT_OSS_LITELLM_MODEL",
+                    "bedrock/converse/arn:aws:bedrock:us-west-2:920736616554:application-inference-profile/tjymazoaq2rp",
+                ),
+                "aws_region_name": os.getenv("DFC_GPT_OSS_REGION", "us-west-2"),
+            },
+            "kimi-k2.5": {
+                "model": os.getenv(
+                    "DFC_KIMI_LITELLM_MODEL",
+                    "bedrock/converse/arn:aws:bedrock:us-west-2:920736616554:application-inference-profile/o3yywotci3jp",
+                ),
+                "aws_region_name": os.getenv("DFC_KIMI_REGION", "us-west-2"),
+            },
+            "minimax-m2.5": {
+                "model": os.getenv(
+                    "DFC_MINIMAX_LITELLM_MODEL",
+                    "bedrock/converse/arn:aws:bedrock:us-west-2:920736616554:application-inference-profile/i4njkg1kyzjo",
+                ),
+                "aws_region_name": os.getenv("DFC_MINIMAX_REGION", "us-west-2"),
+            },
+        }
+        cfg = litellm_models.get(model, {"model": model, "aws_region_name": os.getenv("AWS_REGION", "us-east-1")})
+        llm = OpenAILLM(LiteLLMClient(aws_region_name=cfg["aws_region_name"]), cfg["model"])
 
     elif provider == "together":
         client = openai.OpenAI(
@@ -633,27 +679,35 @@ class AgentPipeline(BasePipelineElement):
 
             agent_model_name = llm_name if isinstance(llm_name, str) else getattr(llm, "model", "unknown")
             dfc_model_name = config.dfc_model or agent_model_name
-            # Cheap, separate model for the neutral read-only-vs-effectful sink classifier (admission
-            # control). Defaults to Haiku on Bedrock; override via DFC_CLASSIFIER_MODEL. None => reuse dfc.
+            # The structured-output client is chosen by the DFC MODEL's provider, independent of the agent
+            # (e.g. a Qwen/LiteLLM agent paired with an Opus-on-Bedrock policy generator). The classifier
+            # is a separate cheap model; defaults to Haiku on Bedrock, override via DFC_CLASSIFIER_MODEL.
+            try:
+                dfc_provider = MODEL_PROVIDERS[ModelsEnum(dfc_model_name)]
+            except (ValueError, KeyError):
+                dfc_provider = (
+                    "bedrock" if dfc_model_name.startswith(("us.anthropic", "global.anthropic", "anthropic."))
+                    else "openai"
+                )
             classifier_model_name: str | None = None
-            if isinstance(llm, OpenAILLM):
-                from dfc_agent_framework_integration.llm import OpenAIStructuredLLMClient
-                structured_llm = OpenAIStructuredLLMClient(llm.client, dfc_model_name)
-                classifier_model_name = os.getenv("DFC_CLASSIFIER_MODEL") or None
-            elif isinstance(llm, AnthropicLLM):
-                # Bedrock-hosted Claude: a sync Bedrock client for structured policy generation.
+            if dfc_provider == "bedrock":
                 bedrock_client = anthropic.AnthropicBedrock(
                     aws_region=os.getenv("AWS_REGION", "us-east-1"),
                     timeout=float(os.getenv("BEDROCK_TIMEOUT", "180")),
-                    max_retries=2,
+                    max_retries=int(os.getenv("BEDROCK_MAX_RETRIES", "6")),
                 )
                 structured_llm = BedrockStructuredLLMClient(bedrock_client, dfc_model_name)
                 classifier_model_name = os.getenv(
                     "DFC_CLASSIFIER_MODEL", "us.anthropic.claude-haiku-4-5-20251001-v1:0"
                 )
+            elif dfc_provider == "openai" and isinstance(llm, OpenAILLM):
+                from dfc_agent_framework_integration.llm import OpenAIStructuredLLMClient
+                structured_llm = OpenAIStructuredLLMClient(llm.client, dfc_model_name)
+                classifier_model_name = os.getenv("DFC_CLASSIFIER_MODEL") or None
             else:
                 raise ValueError(
-                    "dfc_agent_framework_integration defense requires an OpenAI or Bedrock/Anthropic model"
+                    f"dfc_agent_framework_integration: no structured client for dfc_model {dfc_model_name!r} "
+                    f"(provider {dfc_provider}) with agent {type(llm).__name__}"
                 )
             guarded_llm = AgentDojoDFCPromptGuard(llm)
             tools_loop = ToolsExecutionLoop([AgentDojoDFCToolsExecutor(tool_output_formatter), guarded_llm])
@@ -679,11 +733,23 @@ class AgentPipeline(BasePipelineElement):
                 raise ValueError("Tool filter is only supported for OpenAI models")
             if llm_name is None:
                 raise ValueError("Tool filter is only supported for models with a name")
+            # The tool-filter LLM defaults to the agent's own model + client. Point it at a SEPARATE judge
+            # (e.g. Opus 4.8 on Bedrock) via DFC_TOOL_FILTER_MODEL [+ DFC_TOOL_FILTER_REGION] so the filter
+            # runs on a stronger model while the agent under test stays unchanged. The filter calls an
+            # OpenAI-style chat.completions.create, which the LiteLLMClient shim provides.
+            filter_model = os.getenv("DFC_TOOL_FILTER_MODEL")
+            if filter_model:
+                from agentdojo.agent_pipeline.llms.litellm_client import LiteLLMClient
+
+                filter_client: Any = LiteLLMClient(aws_region_name=os.getenv("DFC_TOOL_FILTER_REGION", "us-east-1"))
+                filter_name = filter_model
+            else:
+                filter_client, filter_name = llm.client, llm_name
             pipeline = cls(
                 [
                     system_message_component,
                     init_query_component,
-                    OpenAILLMToolFilter(TOOL_FILTER_PROMPT, llm.client, llm_name),
+                    OpenAILLMToolFilter(TOOL_FILTER_PROMPT, filter_client, filter_name),
                     llm,
                     tools_loop,
                 ]

@@ -94,8 +94,8 @@ def run_task_with_injection_tasks(
                     injection_task=injection_task.ID,
                     logdir=logdir,
                 )
-            except (ValidationError, FileNotFoundError):
-                task_result = None
+            except (ValidationError, FileNotFoundError, JSONDecodeError):
+                task_result = None  # empty/corrupt cached file (e.g. from an interrupted run) -> re-run
         else:
             task_result = None
 
@@ -265,8 +265,8 @@ def run_task_without_injection_tasks(
                 injection_task="none",
                 logdir=logdir,
             )
-        except (ValidationError, FileNotFoundError):
-            task_result = None
+        except (ValidationError, FileNotFoundError, JSONDecodeError):
+            task_result = None  # empty/corrupt cached file (e.g. from an interrupted run) -> re-run
     else:
         task_result = None
 

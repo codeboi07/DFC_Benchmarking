@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 from ast import literal_eval
 from collections.abc import Sequence
@@ -7,12 +8,19 @@ from pathlib import Path
 
 from agentdojo.agent_pipeline.base_pipeline_element import BasePipelineElement
 from agentdojo.agent_pipeline.tool_execution import ToolsExecutor
-from agentdojo.functions_runtime import EmptyEnv, Env, FunctionsRuntime
+from agentdojo.functions_runtime import EmptyEnv, Env, FunctionsRuntime, make_function
 from agentdojo.logging import Logger, TraceLogger
 from agentdojo.task_suite.load_suites import get_suites
-from agentdojo.types import ChatMessage, ChatUserMessage, get_text_content_as_str, text_content_block_from_string
+from agentdojo.types import (
+    ChatMessage,
+    ChatToolResultMessage,
+    ChatUserMessage,
+    get_text_content_as_str,
+    text_content_block_from_string,
+)
 from dfc_agent_framework_integration.context import DFCBenchmarkContext
 from dfc_agent_framework_integration.dfc_event_log import DFCEventLog, resolve_dfc_artifact_dir
+from dfc_agent_framework_integration.events import list_singular_column
 from dfc_agent_framework_integration.persistence import export_run_artifacts
 from dfc_agent_framework_integration.runtime import (
     format_prompt_violation_message,
@@ -20,7 +28,13 @@ from dfc_agent_framework_integration.runtime import (
     format_violation_message,
     is_dfc_feedback_user_message,
 )
-from dfc_agent_framework_integration.schema import BenchmarkTaskContext, RuntimeSchema
+from dfc_agent_framework_integration.schema import BenchmarkTaskContext, RuntimeSchema, SourceRequiredResult
+from dfc_agent_framework_integration.source_required import (
+    format_source_required_redirect,
+    format_source_required_system_notice,
+    source_required_sink_for_tool,
+)
+from dfc_agent_framework_integration.sql_tool import SQL_TOOL_NAME, execute_sql_for_source_required
 
 DFC_SYSTEM_NOTICE = (
     "Data flow policies are enforced automatically for this task. If a tool call or "
@@ -126,6 +140,18 @@ def export_dfc_context_to_run_log(dfc_context: DFCBenchmarkContext) -> Path | No
         logging.warning("Failed to export DFC artifacts to %s: %s", artifact_dir, exc)
         return None
 
+    # Central, append-only ledger of every policy generated — one greppable place to look back.
+    # Defaults to <runs>/policy_ledger.jsonl; override with DFC_POLICY_LEDGER.
+    try:
+        import os
+
+        from dfc_agent_framework_integration.persistence import append_policy_ledger
+
+        ledger = os.getenv("DFC_POLICY_LEDGER") or str(Path(logger.dirpath) / "policy_ledger.jsonl")
+        append_policy_ledger(dfc_context, Path(ledger))
+    except Exception as exc:
+        logging.warning("Failed to append policy ledger: %s", exc)
+
     return artifact_dir
 
 
@@ -169,6 +195,54 @@ def _augment_system(messages: Sequence[ChatMessage], notice: str) -> list[ChatMe
     else:
         msgs.insert(0, {"role": "system", "content": [block]})  # type: ignore[arg-type]
     return msgs
+
+
+def format_source_required_retry(result: SourceRequiredResult, sinks: dict) -> str:
+    """Feedback for a blocked SOURCE REQUIRED gateway call (SQL/validation error, policy KILL, 0-row
+    filter, or judge-flagged injection). Same retry voice as an SR failure: explain, then re-show the
+    sink/source schemas + example so the model can correct and retry (or skip the step)."""
+    lines = ["Data flow policy violation. The action was not performed.", result.message]
+    sink = sinks.get(result.sink_relation) if result.sink_relation else None
+    if sink is not None:
+        lines += ["", format_source_required_redirect(sink)]
+    else:
+        lines.append(
+            "Call execute_sql_for_source_required again with a single "
+            "INSERT INTO <sink> (...) SELECT ... FROM <source> WHERE ... statement, or continue the task "
+            "without this step."
+        )
+    return "\n".join(lines)
+
+
+def _row_to_tool_args(row: dict, runtime: FunctionsRuntime, tool_name: str) -> dict:
+    """Map an inserted sink row back to the real tool's arguments: consult the tool schema to re-assemble
+    list params that were exploded into singular columns, and drop helper/NULL columns."""
+    function = runtime.functions.get(tool_name)
+    properties: dict = {}
+    if function is not None:
+        try:
+            properties = function.parameters.model_json_schema().get("properties", {})
+        except Exception:
+            properties = {}
+    if not properties:  # no schema available -> pass through non-null columns
+        return {key: value for key, value in row.items() if value is not None}
+    args: dict = {}
+    for name, prop in properties.items():
+        is_list = isinstance(prop, dict) and prop.get("type") == "array"
+        if name in row and row[name] is not None:
+            value = row[name]
+            if is_list and isinstance(value, str):
+                try:
+                    parsed = json.loads(value)
+                    value = parsed if isinstance(parsed, list) else [value]
+                except Exception:
+                    value = [value]
+            args[name] = value
+        elif is_list:
+            singular = list_singular_column(name)
+            if singular and row.get(singular) is not None:
+                args[name] = [row[singular]]
+    return args
 
 
 class AgentDojoDFCBootstrap(BasePipelineElement):
@@ -225,7 +299,17 @@ class AgentDojoDFCBootstrap(BasePipelineElement):
             functions=runtime.functions,
             event_log=DFCEventLog(resolve_dfc_artifact_dir()),
         )
-        messages = _augment_system(messages, DFC_SYSTEM_NOTICE)
+        # Advertise the SOURCE REQUIRED SQL gateway ONLY when this task has an SR-guarded sink, and only
+        # after prepare_task (RuntimeSchema.from_tools already ran above, so the tool never becomes a sink
+        # relation / policy target). Baseline and non-SR tasks see the unchanged tool set.
+        notice = DFC_SYSTEM_NOTICE
+        if context.source_required_sinks:
+            if SQL_TOOL_NAME not in runtime.functions:
+                runtime.functions[SQL_TOOL_NAME] = make_function(execute_sql_for_source_required)
+            sr_notice = format_source_required_system_notice(context.source_required_sinks)
+            if sr_notice:
+                notice = f"{notice}\n\n{sr_notice}"
+        messages = _augment_system(messages, notice)
         extra_args = {**extra_args, "dfc_context": context}
         return query, runtime, env, messages, extra_args
 
@@ -278,6 +362,30 @@ class AgentDojoDFCToolsExecutor(ToolsExecutor):
                 )
                 continue
 
+            # SOURCE REQUIRED SQL gateway: run the model-authored INSERT through policy enforcement, then
+            # (on success) perform the real action from the inserted sink row.
+            if tool_call.function == SQL_TOOL_NAME:
+                result = context.execute_source_required_sql(str(tool_call.args.get("sql", "")))
+                tool_call_results.append(
+                    self._source_required_result_message(result, tool_call, runtime, env, context)
+                )
+                continue
+
+            # Pre-emptive redirect: a direct call to an SR-guarded tool can never pass (the auto-staging
+            # write never reads the source) — bounce it to the SQL gateway with the sink/source schemas.
+            sr_sink = source_required_sink_for_tool(context.source_required_sinks, tool_call.function)
+            if sr_sink is not None:
+                tool_call_results.append(
+                    ChatToolResultMessage(
+                        role="tool",
+                        content=[text_content_block_from_string("")],
+                        tool_call_id=tool_call.id,
+                        tool_call=tool_call,
+                        error=format_source_required_redirect(sr_sink),
+                    )
+                )
+                continue
+
             args = dict(tool_call.args)
             for arg_k, arg_v in args.items():
                 if isinstance(arg_v, str) and is_string_list(arg_v):
@@ -310,6 +418,42 @@ class AgentDojoDFCToolsExecutor(ToolsExecutor):
                 )
             )
         return query, runtime, env, [*messages, *tool_call_results], extra_args
+
+    def _source_required_result_message(
+        self,
+        result: SourceRequiredResult,
+        tool_call,
+        runtime: FunctionsRuntime,
+        env: Env,
+        context: DFCBenchmarkContext,
+    ) -> ChatToolResultMessage:
+        """On a successful SOURCE REQUIRED write, perform the real action(s) from the inserted sink row(s)
+        and return the tool result. On any block, return the shared SR retry message."""
+        if result.status == "ok":
+            outputs: list[str] = []
+            last_error: str | None = None
+            for row in result.rows:
+                args = _row_to_tool_args(row, runtime, result.tool_name)
+                tool_call_result, error = runtime.run_function(env, result.tool_name, args)
+                if error is None:
+                    context.record_tool_output(result.tool_name, tool_call_result)
+                    outputs.append(self.output_formatter(tool_call_result))
+                else:
+                    last_error = error
+            return ChatToolResultMessage(
+                role="tool",
+                content=[text_content_block_from_string("\n".join(outputs))],
+                tool_call_id=tool_call.id,
+                tool_call=tool_call,
+                error=last_error,
+            )
+        return ChatToolResultMessage(
+            role="tool",
+            content=[text_content_block_from_string("")],
+            tool_call_id=tool_call.id,
+            tool_call=tool_call,
+            error=format_source_required_retry(result, context.source_required_sinks),
+        )
 
 
 class AgentDojoDFCPromptGuard(BasePipelineElement):

@@ -42,17 +42,23 @@ def test_policy_generation_instructions_require_on_fail_kill(send_email_runtime)
     assert "Do not use ON FAIL REMOVE" in instructions
     assert "DIMENSION may reference any relation in the schema" in instructions
     assert "Do not wrap SINK columns in aggregates" in instructions
-    assert "SOURCE columns may need aggregates" in instructions
+    assert "do NOT aggregate the SOURCE column" in instructions
     assert "Data exfiltration policies" in instructions
     assert "Tool: send_email" in instructions
     assert "Description:" in instructions
     assert "Prevent data exfiltration" in instructions
-    assert "GetShoppingAccountUserInformationOutput" in instructions
-    assert "COALESCE(max(password), '')" in instructions
-    assert "DIMENSION (SELECT COALESCE" in instructions
-    assert "AccountInfo.password" in instructions
-    assert "contains(SendEmailInput.body, AccountInfo.password)" in instructions
     assert "InputToWebpageInput" in instructions
+    # Current exfiltration guidance guards the destination rather than matching body content
+    # (the old COALESCE/contains content-matching example was intentionally removed).
+    assert "Always guard the destination, never the content" in instructions
+    # SOURCE REQUIRED read->write provenance examples (one per AgentDyn suite), each injection-guarded.
+    assert "SOURCE REQUIRED" in instructions
+    assert "BrowseWebpageOutput" in instructions
+    assert "GitInviteCollaboratorsInput" in instructions
+    assert "AddCalendarEventParticipantsInput" in instructions
+    # Free-text sources are grounded with contains() against the real __dfc_raw_json column.
+    assert "contains(" in instructions
+    assert "__dfc_raw_json" in instructions
 
 
 def test_repair_instructions_include_policy_examples(send_email_runtime):

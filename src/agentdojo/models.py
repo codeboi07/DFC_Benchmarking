@@ -24,6 +24,20 @@ class ModelsEnum(StrEnum):
     """Claude Sonnet 4.5 (Bedrock)"""
     BEDROCK_CLAUDE_HAIKU_4_5 = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
     """Claude Haiku 4.5 (Bedrock)"""
+    BEDROCK_CLAUDE_SONNET_4_6 = "us.anthropic.claude-sonnet-4-6"
+    """Claude Sonnet 4.6 (Bedrock)"""
+    BEDROCK_CLAUDE_OPUS_4_8 = "us.anthropic.claude-opus-4-8"
+    """Claude Opus 4.8 (Bedrock)"""
+    LITELLM_QWEN3_235B = "qwen3-235b"
+    """Qwen3-235B via LiteLLM (Bedrock Converse application inference profile, us-west-2)."""
+    LITELLM_DEEPSEEK_V3_2 = "deepseek-v3.2"
+    """DeepSeek V3.2 via LiteLLM (Bedrock Converse application inference profile, us-west-2)."""
+    LITELLM_GPT_OSS_120B = "gpt-oss-120b"
+    """OpenAI GPT-OSS 120B via LiteLLM (Bedrock Converse application inference profile, us-west-2)."""
+    LITELLM_KIMI_K2_5 = "kimi-k2.5"
+    """Moonshot AI Kimi K2.5 via LiteLLM (Bedrock Converse application inference profile, us-west-2)."""
+    LITELLM_MINIMAX_M2_5 = "minimax-m2.5"
+    """MiniMax M2.5 via LiteLLM (Bedrock Converse application inference profile, us-west-2)."""
 
 
 MODEL_PROVIDERS = {
@@ -37,12 +51,26 @@ MODEL_PROVIDERS = {
     ModelsEnum.GPT_4_TURBO_2024_04_09: "openai",
     ModelsEnum.BEDROCK_CLAUDE_SONNET_4_5: "bedrock",
     ModelsEnum.BEDROCK_CLAUDE_HAIKU_4_5: "bedrock",
+    ModelsEnum.BEDROCK_CLAUDE_SONNET_4_6: "bedrock",
+    ModelsEnum.BEDROCK_CLAUDE_OPUS_4_8: "bedrock",
+    ModelsEnum.LITELLM_QWEN3_235B: "litellm",
+    ModelsEnum.LITELLM_DEEPSEEK_V3_2: "litellm",
+    ModelsEnum.LITELLM_GPT_OSS_120B: "litellm",
+    ModelsEnum.LITELLM_KIMI_K2_5: "litellm",
+    ModelsEnum.LITELLM_MINIMAX_M2_5: "litellm",
 }
 
 
 MODEL_NAMES = {
     "us.anthropic.claude-sonnet-4-5-20250929-v1:0": "Claude",
     "us.anthropic.claude-haiku-4-5-20251001-v1:0": "Claude",
+    "us.anthropic.claude-sonnet-4-6": "Claude",
+    "us.anthropic.claude-opus-4-8": "Claude",
+    "qwen3-235b": "Qwen",
+    "deepseek-v3.2": "DeepSeek",
+    "gpt-oss-120b": "GPT-OSS",
+    "kimi-k2.5": "Kimi",
+    "minimax-m2.5": "MiniMax",
     "gpt-5.1-2025-11-13": "GPT-5",
     "gpt-4o-2024-08-06": "GPT-4",
     "gpt-4o-2024-05-13": "GPT-4",
