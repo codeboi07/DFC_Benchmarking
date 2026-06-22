@@ -10,5 +10,14 @@ __pycache__/
 *.pyc
 
 runs/
+runs_diag/
+runs_fb/
+runs_q/
+runs_shopping_fb/
+notebooks/final_runs/
 .venv/
 papers/
+.pytest_cache/
+.ruff_cache/
+*.duckdb
+*.duckdb.wal

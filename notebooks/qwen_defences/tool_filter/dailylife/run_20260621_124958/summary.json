@@ -1,0 +1,21 @@
+{
+  "suite": "dailylife",
+  "agent": "qwen3-235b",
+  "defense": "tool_filter",
+  "filter_model": "bedrock/converse/us.anthropic.claude-opus-4-8",
+  "run_id": "20260621_124958",
+  "baseline": {
+    "ASR": 0.9597989949748744,
+    "n_att": 199,
+    "utility": 0.6,
+    "n_clean": 20,
+    "errors": 1
+  },
+  "defended": {
+    "ASR": 0.235,
+    "n_att": 200,
+    "utility": 0.2,
+    "n_clean": 20,
+    "errors": 0
+  }
+}
