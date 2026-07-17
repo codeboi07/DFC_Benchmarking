@@ -1,0 +1,1 @@
+- **20260621_124958** tool_filter — baseline ASR 96.0% -> 23.5%, utility 20%, errors 0  (`run_20260621_124958/`)

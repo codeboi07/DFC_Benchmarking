@@ -118,6 +118,7 @@ class DFCViolation(BaseModel):
     policy_ids: list[str] = Field(default_factory=list)
     policy_descriptions: list[str]
     raw_error: str | None = None
+    guidance: str | None = None  # specific, simple, injection-aware feedback built from the exact policy that fired
 
 
 class ViolationIdentification(BaseModel):
@@ -132,6 +133,34 @@ class RelationSchema(BaseModel):
     description: str = ""
     tool_name: str | None = None
     source_key_by_column: dict[str, str] = Field(default_factory=dict)
+
+
+class SourceRequiredSink(BaseModel):
+    """A sink relation guarded by a SOURCE REQUIRED policy for the current task. The agent cannot write
+    this sink via a direct tool call (the auto-staging INSERT never reads the source, so the engine
+    always KILLs it); it must author an `INSERT ... SELECT ... FROM <source>` through the SQL gateway
+    tool so provenance from the source relation is established."""
+
+    sink_relation: str
+    tool_name: str
+    policy_id: str
+    pgn: str
+    constraint: str = ""
+    sink_columns: dict[str, str] = Field(default_factory=dict)
+    sink_column_descriptions: dict[str, str] = Field(default_factory=dict)
+    source_relations: list[str] = Field(default_factory=list)
+    source_columns: dict[str, dict[str, str]] = Field(default_factory=dict)
+    source_column_descriptions: dict[str, dict[str, str]] = Field(default_factory=dict)
+
+
+class SourceRequiredResult(BaseModel):
+    """Outcome of running a model-authored SOURCE REQUIRED INSERT through the policy-aware connection."""
+
+    status: Literal["ok", "error", "policy", "filtered", "injection"]
+    sink_relation: str
+    tool_name: str = ""
+    rows: list[dict[str, Any]] = Field(default_factory=list)  # just-inserted sink rows (user columns)
+    message: str = ""  # error / block detail for feedback
 
 
 class RuntimeSchema(BaseModel):
