@@ -268,6 +268,21 @@ The old `--defense dfc` prototype (SQL `execute_intent` gateway, static `policie
 
 LLM-facing policy patterns live in [`prompts.py`](../../dfc_agent_framework_integration/src/dfc_agent_framework_integration/prompts.py) (`POLICY_EXAMPLES`, `STRUCTURED_OUTPUT_GUIDANCE`, `REPAIR_DECISION_GUIDANCE`). The SKILL summarizes operational rules integrators need.
 
+## Manual Policy Bundles
+
+Handwritten PGN bundles can be loaded alongside LLM-generated policies when a benchmark has known attack-task guards that should be enforced deterministically.
+
+```python
+context = DFCBenchmarkContext.prepare_task(
+    ...,
+    manual_policy_paths=["policies/airline_attack_dfc_policies.pgn"],
+)
+```
+
+For AgentDyn wiring, pass paths through `AgentDojoDFCBootstrap(..., manual_policy_paths=[...])` or `extra_args["dfc_manual_policy_paths"]`.
+
+Manual bundles are parsed one `SINK ...` block at a time, validated against the current runtime schema, registered with Passant through `Policy.from_pgn(...)`, and appended to diagnostics as `manual_<file_stem>_<index>`. A policy whose sink/dimension/source is absent from the current benchmark schema is recorded as deleted instead of crashing setup. At runtime, these policies protect the same guarded writes as generated policies: `*Input` tool-call rows before execution, `PromptInput` before LLM calls, and `AssistantResponseOutput` before final responses are accepted.
+
 ### Structured output (PGN field pitfalls)
 
 Common registration failures from malformed LLM JSON:

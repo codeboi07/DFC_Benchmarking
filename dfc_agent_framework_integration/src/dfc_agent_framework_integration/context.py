@@ -12,6 +12,7 @@ from dfc_agent_framework_integration.events import (
 )
 from dfc_agent_framework_integration.dfc_event_log import DFCEventLog
 from dfc_agent_framework_integration.extraction import extract_preamble_facts
+from dfc_agent_framework_integration.manual_policies import load_and_register_manual_policies
 from dfc_agent_framework_integration.materialize import materialize_preamble_data
 from dfc_agent_framework_integration.policies import generate_and_register_policies
 from dfc_agent_framework_integration.runtime import DFCRuntimeValidator
@@ -65,6 +66,7 @@ class DFCBenchmarkContext:
         functions: dict[str, Any],
         agent_model: str | None = None,
         classifier_model: str | None = None,
+        manual_policy_paths: list[str] | None = None,
         event_log: DFCEventLog | None = None,
     ) -> DFCBenchmarkContext:
         event_log = event_log or DFCEventLog(None)
@@ -108,6 +110,17 @@ class DFCBenchmarkContext:
             event_log=event_log,
             classifier_model=classifier_model,
         )
+        if manual_policy_paths:
+            manual_generated, manual_registered, manual_deleted, manual_registration = load_and_register_manual_policies(
+                dfc_conn,
+                policy_paths=manual_policy_paths,
+                runtime_schema=runtime_schema,
+                event_log=event_log,
+            )
+            generated_policies.extend(manual_generated)
+            registered_policy_ids.extend(manual_registered)
+            deleted.extend(manual_deleted)
+            policy_registration.extend(manual_registration)
         dfc_conn.refresh_catalog()
         event_log.log(
             "policy_generation_complete",

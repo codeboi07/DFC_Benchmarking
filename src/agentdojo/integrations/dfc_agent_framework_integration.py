@@ -180,6 +180,7 @@ class AgentDojoDFCBootstrap(BasePipelineElement):
         *,
         agent_model: str | None = None,
         classifier_model: str | None = None,
+        manual_policy_paths: Sequence[str] | None = None,
         benchmark_name: str = "agentdyn",
         benchmark_version: str | None = "v1.2.2",
     ) -> None:
@@ -188,6 +189,7 @@ class AgentDojoDFCBootstrap(BasePipelineElement):
         self.dfc_model = dfc_model
         self.agent_model = agent_model
         self.classifier_model = classifier_model
+        self.manual_policy_paths = list(manual_policy_paths or [])
         self.benchmark_name = benchmark_name
         self.benchmark_version = benchmark_version
 
@@ -222,6 +224,7 @@ class AgentDojoDFCBootstrap(BasePipelineElement):
             dfc_model=self.dfc_model,
             agent_model=self.agent_model,
             classifier_model=self.classifier_model,
+            manual_policy_paths=list(extra_args.get("dfc_manual_policy_paths") or self.manual_policy_paths),
             functions=runtime.functions,
             event_log=DFCEventLog(resolve_dfc_artifact_dir()),
         )

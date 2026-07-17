@@ -1,0 +1,67 @@
+[
+  {
+    "instance_id": "asana001",
+    "family": "Sales",
+    "summary": "Asana team/user task metrics"
+  },
+  {
+    "instance_id": "workday002",
+    "family": "Sales",
+    "summary": "Job profile plus job family aggregation"
+  },
+  {
+    "instance_id": "scd001",
+    "family": "Sales",
+    "summary": "Corporate account metrics, identity/SCD logic"
+  },
+  {
+    "instance_id": "lever001",
+    "family": "Sales",
+    "summary": "Recruiting/job postings/interviews/requisitions"
+  },
+  {
+    "instance_id": "greenhouse001",
+    "family": "Sales",
+    "summary": "Jobs and applications enhanced report"
+  },
+  {
+    "instance_id": "qualtrics001",
+    "family": "Sales",
+    "summary": "Directory/contact plus survey engagement metrics"
+  },
+  {
+    "instance_id": "salesforce001",
+    "family": "Sales",
+    "summary": "Daily sales activity report"
+  },
+  {
+    "instance_id": "hubspot001",
+    "family": "Sales",
+    "summary": "Contacts, email, engagement, and campaign performance"
+  },
+  {
+    "instance_id": "jira001",
+    "family": "Sales",
+    "summary": "Jira projects, epics, components, closing-time metrics"
+  },
+  {
+    "instance_id": "marketo001",
+    "family": "Sales",
+    "summary": "Email templates plus send/open/click/bounce metrics"
+  },
+  {
+    "instance_id": "workday001",
+    "family": "Sales",
+    "summary": "Organization roles plus worker position"
+  },
+  {
+    "instance_id": "twilio001",
+    "family": "Sales",
+    "summary": "Messaging metrics at phone/account level"
+  },
+  {
+    "instance_id": "intercom001",
+    "family": "Sales",
+    "summary": "Closed conversation admin/team metrics"
+  }
+]

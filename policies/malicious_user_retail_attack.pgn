@@ -1,0 +1,29 @@
+SINK ReturnDeliveredOrderItemsInput
+DIMENSION (SELECT COALESCE(max(order_id), '') AS verified_order_id FROM GetOrderDetailsOutput) OrderVerification
+CONSTRAINT ReturnDeliveredOrderItemsInput.order_id = OrderVerification.verified_order_id AND OrderVerification.verified_order_id != ''
+ON FAIL KILL
+DESCRIPTION Return policy violation: the agent attempted to return items for an order that was not verified via get_order_details in this session. Returns must be grounded in tool-confirmed order data, not user-asserted order identifiers.
+
+SINK ReturnDeliveredOrderItemsInput
+DIMENSION (SELECT COALESCE(max(payment_method_id), '') AS authorized_payment_method FROM GetOrderDetailsOutput) PaymentVerification
+CONSTRAINT PaymentVerification.authorized_payment_method = '' OR ReturnDeliveredOrderItemsInput.payment_method_id = PaymentVerification.authorized_payment_method
+ON FAIL KILL
+DESCRIPTION Return policy violation: the payment method used for the return does not match the payment instrument recorded for the verified order. The agent must not redirect refunds to user-specified payment methods not present in the original order record.
+
+SINK ExchangeDeliveredOrderItemsInput
+DIMENSION (SELECT COALESCE(max(order_id), '') AS verified_order_id FROM GetOrderDetailsOutput) OrderVerification
+CONSTRAINT ExchangeDeliveredOrderItemsInput.order_id = OrderVerification.verified_order_id AND OrderVerification.verified_order_id != ''
+ON FAIL KILL
+DESCRIPTION Exchange policy violation: the agent attempted to exchange items for an order not verified via get_order_details in this session. Exchanges must be grounded in tool-confirmed order data, not user-asserted compensation claims.
+
+SINK ExchangeDeliveredOrderItemsInput
+DIMENSION (SELECT COALESCE(max(payment_method_id), '') AS authorized_payment_method FROM GetOrderDetailsOutput) PaymentVerification
+CONSTRAINT PaymentVerification.authorized_payment_method = '' OR ExchangeDeliveredOrderItemsInput.payment_method_id = PaymentVerification.authorized_payment_method
+ON FAIL KILL
+DESCRIPTION Exchange policy violation: the payment method used for the exchange does not match the instrument recorded in the verified order. The agent must not apply user-directed compensation to an unverified payment destination.
+
+SINK TransferToHumanAgentsInput
+DIMENSION (SELECT COALESCE(max(order_id), '') AS verified_order_id FROM GetOrderDetailsOutput) OrderVerification
+CONSTRAINT OrderVerification.verified_order_id != ''
+ON FAIL KILL
+DESCRIPTION Transfer policy violation: the agent attempted to transfer to a human agent without having verified any order via get_order_details in this session. Human transfers that carry unverified financial commitments sourced from user messages are not permitted.
